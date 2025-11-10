@@ -41,22 +41,49 @@ async fn main() {
     // Start block fetcher task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let block_fetcher_handle = tokio::spawn(async move {
         run_block_fetcher(fetcher_clone, database_clone, rx).await;
     });
-    
+
     // Start checkpoint fetcher task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let checkpoint_fetcher_handle = tokio::spawn(async move {
         start_checkpoint_fetcher(fetcher_clone, database_clone, tx, config.fetch_interval).await;
     });
 
     // Start checkpoint status updater task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let status_updater_handle = tokio::spawn(async move {
         start_checkpoint_status_updater_task(fetcher_clone, database_clone, config.status_update_interval).await;
+    });
+
+    // Monitor critical tasks - if any of them fail, abort the entire application
+    tokio::spawn(async move {
+        tokio::select! {
+            result = block_fetcher_handle => {
+                match result {
+                    Ok(_) => tracing::error!("Block fetcher task ended unexpectedly"),
+                    Err(e) => tracing::error!("Block fetcher task panicked: {:?}", e),
+                }
+                std::process::abort();
+            }
+            result = checkpoint_fetcher_handle => {
+                match result {
+                    Ok(_) => tracing::error!("Checkpoint fetcher task ended unexpectedly"),
+                    Err(e) => tracing::error!("Checkpoint fetcher task panicked: {:?}", e),
+                }
+                std::process::abort();
+            }
+            result = status_updater_handle => {
+                match result {
+                    Ok(_) => tracing::error!("Status updater task ended unexpectedly"),
+                    Err(e) => tracing::error!("Status updater task panicked: {:?}", e),
+                }
+                std::process::abort();
+            }
+        }
     }); 
 
     // api routes
