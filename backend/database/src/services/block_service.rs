@@ -1,5 +1,4 @@
 use model::block::{ActiveModel as BlockActiveModel, Entity as Block, RpcBlockHeader};
-use model::pgu64::PgU64;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 use tracing::error;
 
@@ -13,7 +12,7 @@ impl<'a> BlockService<'a> {
         Self { db }
     }
 
-    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: i64) {
+    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u64) {
         // Use `From` to convert `RpcBlockHeader` into an `ActiveModel`
         let mut active_model: BlockActiveModel = rpc_block_header.into();
 
@@ -22,7 +21,7 @@ impl<'a> BlockService<'a> {
 
         // If block already exists locally do nothing
         if self.block_exists(height).await {
-            tracing::debug!("Block already exists, height={}", PgU64::i64_to_u64(height));
+            tracing::debug!("Block already exists, height={}", height);
             return;
         }
         // ensure that blocks exist incrementally and continuously
@@ -38,41 +37,35 @@ impl<'a> BlockService<'a> {
             Ok(_) => {
                 tracing::debug!(
                     "Block inserted & indexed successfully: height={}, block_hash={}",
-                    PgU64::i64_to_u64(height),
+                    height,
                     block_id
                 );
             }
             Err(err) => {
-                tracing::error!(
-                    "Error inserting block with height {}: {:?}",
-                    PgU64::i64_to_u64(height),
-                    err
-                );
+                tracing::error!("Error inserting block with height {}: {:?}", height, err);
             }
         }
     }
 
-    /// Get the latest checkpoint index stored in the database
-    pub async fn get_latest_block_index(&self) -> Option<i64> {
-        // use sea_orm::entity::prelude::*;
-
+    /// Get the latest block height stored in the database
+    pub async fn get_latest_block_index(&self) -> Option<u64> {
         match Block::find()
             .select_only()
             .column_as(model::block::Column::Height.max(), "max_height")
-            .into_tuple::<Option<i64>>() // Fetch the max value as a tuple
+            .into_tuple::<Option<u64>>()
             .one(self.db)
             .await
         {
             Ok(Some(max_height)) => max_height,
-            Ok(_) => None, // If no block exist, return None
+            Ok(_) => None, // If no blocks exist, return None
             Err(err) => {
-                error!("Failed to fetch the latest  block index: {:?}", err);
+                error!("Failed to fetch the latest block index: {:?}", err);
                 None
             }
         }
     }
 
-    async fn block_exists(&self, height: i64) -> bool {
+    async fn block_exists(&self, height: u64) -> bool {
         Block::find()
             .filter(model::block::Column::Height.eq(height))
             .one(self.db)
@@ -81,9 +74,9 @@ impl<'a> BlockService<'a> {
             .unwrap_or(false)
     }
 
-    async fn prev_block_exists(&self, height: i64) -> bool {
-        if height == i64::MIN {
-            // return true for the genesis block
+    async fn prev_block_exists(&self, height: u64) -> bool {
+        if height == 0 {
+            // genesis block has no predecessor
             return true;
         }
         self.block_exists(height - 1).await
@@ -93,7 +86,7 @@ impl<'a> BlockService<'a> {
     /// The conditions it should meet are:
     ///     1. The block table should be empty
     ///     2. or, the block table should have the previous block
-    pub async fn can_insert_block(&self, height: i64) -> bool {
+    pub async fn can_insert_block(&self, height: u64) -> bool {
         if self.get_latest_block_index().await.is_none() {
             return true;
         }

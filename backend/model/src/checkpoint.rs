@@ -1,4 +1,3 @@
-use crate::pgu64::PgU64;
 use anyhow::Error;
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
@@ -88,11 +87,11 @@ impl Display for RpcCheckpointConfStatus {
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
     #[sea_orm(primary_key)]
-    pub idx: i64,
-    pub l1_start: i64,
-    pub l1_end: i64,
-    pub l2_start: i64,
-    pub l2_end: i64,
+    pub idx: u64,
+    pub l1_start: u64,
+    pub l1_end: u64,
+    pub l2_start: u64,
+    pub l2_end: u64,
     pub checkpoint_txid: String,
     pub status: String,
 }
@@ -103,19 +102,19 @@ pub enum Relation {}
 impl From<RpcCheckpointInfo> for ActiveModel {
     fn from(info: RpcCheckpointInfo) -> Self {
         Self {
-            idx: Set(PgU64(info.idx).to_i64()),
-            l1_start: Set(PgU64(info.l1_range.0.height).to_i64()),
-            l1_end: Set(PgU64(info.l1_range.1.height).to_i64()),
-            l2_start: Set(PgU64(info.l2_range.0.slot).to_i64()),
-            l2_end: Set(PgU64(info.l2_range.1.slot).to_i64()),
+            idx: Set(info.idx),
+            l1_start: Set(info.l1_range.0.height),
+            l1_end: Set(info.l1_range.1.height),
+            l2_start: Set(info.l2_range.0.slot),
+            l2_end: Set(info.l2_range.1.slot),
             checkpoint_txid: Set(info
                 .l1_reference
                 .as_ref()
-                .map_or("-".to_string(), |c| c.txid.clone())), // Extracting `txid`
+                .map_or("-".to_string(), |c| c.txid.clone())),
             status: Set(info
                 .confirmation_status
                 .as_ref()
-                .map_or("-".to_string(), |s| format!("{:?}", s))), // Convert enum to string
+                .map_or("-".to_string(), |s| format!("{:?}", s))),
         }
     }
 }
@@ -138,22 +137,16 @@ pub struct RpcCheckpointInfoCheckpointExp {
 impl From<Model> for RpcCheckpointInfoCheckpointExp {
     fn from(model: Model) -> Self {
         Self {
-            idx: PgU64::from_i64(model.idx).0,
-            l1_range: (
-                PgU64::from_i64(model.l1_start).0,
-                PgU64::from_i64(model.l1_end).0,
-            ),
-            l2_range: (
-                PgU64::from_i64(model.l2_start).0,
-                PgU64::from_i64(model.l2_end).0,
-            ),
+            idx: model.idx,
+            l1_range: (model.l1_start, model.l1_end),
+            l2_range: (model.l2_start, model.l2_end),
             l1_reference: Some(RpcCheckpointL1Ref {
                 block_height: 0,
                 block_id: "dummy".to_string(),
                 txid: model.checkpoint_txid.clone(),
                 wtxid: "dummy".to_string(),
             }),
-            confirmation_status: model.status.parse().ok(), // Convert status string to `RpcCheckpointConfStatus`
+            confirmation_status: model.status.parse().ok(),
         }
     }
 }

@@ -1,6 +1,5 @@
 use super::utils::resolve_order;
 use crate::services::pagination::PaginatedData;
-use model::pgu64::PgU64;
 use model::{
     block::Entity as Block,
     checkpoint::{
@@ -21,7 +20,7 @@ impl<'a> CheckpointService<'a> {
         Self { db }
     }
 
-    pub async fn checkpoint_exists(&self, idx: i64) -> bool {
+    pub async fn checkpoint_exists(&self, idx: u64) -> bool {
         Checkpoint::find()
             .filter(model::checkpoint::Column::Idx.eq(idx))
             .one(self.db)
@@ -32,42 +31,33 @@ impl<'a> CheckpointService<'a> {
 
     /// Insert a new checkpoint into the database
     pub async fn insert_checkpoint(&self, checkpoint: RpcCheckpointInfo) {
-        let idx: i64 = PgU64(checkpoint.idx).to_i64();
+        let idx: u64 = checkpoint.idx;
 
-        // for the first checkpoint, no need to check the previous checkpoint
-        if idx > i64::MIN {
-            if let Some(previous_idx) = idx.checked_sub(1) {
-                let previous_checkpoint_exists = self.checkpoint_exists(previous_idx).await;
+        // for the first checkpoint (idx=0), no need to check the previous checkpoint
+        if let Some(previous_idx) = idx.checked_sub(1) {
+            let previous_checkpoint_exists = self.checkpoint_exists(previous_idx).await;
 
-                // checkpoints must be continuous, better to restart to re-sync from a valid checkpoint
-                if !previous_checkpoint_exists {
-                    error!(
-                        "Cannot insert checkpoint with idx {}: previous checkpoint with idx {} does not exist",
-                        checkpoint.idx ,
-                        PgU64::i64_to_u64(previous_idx)
-                    );
-                    return;
-                }
+            // checkpoints must be continuous, better to restart to re-sync from a valid checkpoint
+            if !previous_checkpoint_exists {
+                error!(
+                    "Cannot insert checkpoint with idx {}: previous checkpoint with idx {} does not exist",
+                    idx,
+                    previous_idx
+                );
+                return;
             }
         }
 
         // Insert the checkpoint
         let active_model: ActiveModel = checkpoint.into();
         match Checkpoint::insert(active_model).exec(self.db).await {
-            Ok(_) => info!(
-                "Checkpoint with idx {} inserted successfully",
-                PgU64::i64_to_u64(idx)
-            ),
-            Err(err) => error!(
-                "Error inserting checkpoint with idx {}: {:?}",
-                PgU64::i64_to_u64(idx),
-                err
-            ),
+            Ok(_) => info!("Checkpoint with idx {} inserted successfully", idx),
+            Err(err) => error!("Error inserting checkpoint with idx {}: {:?}", idx, err),
         }
     }
 
     /// Fetch a checkpoint by its index
-    pub async fn get_checkpoint_by_idx(&self, idx: i64) -> Option<RpcCheckpointInfoCheckpointExp> {
+    pub async fn get_checkpoint_by_idx(&self, idx: u64) -> Option<RpcCheckpointInfoCheckpointExp> {
         match Checkpoint::find()
             .filter(model::checkpoint::Column::Idx.eq(idx))
             .one(self.db)
@@ -86,7 +76,7 @@ impl<'a> CheckpointService<'a> {
     pub async fn get_checkpoint_idx_by_block_hash(
         &self,
         block_hash: &str,
-    ) -> Result<Option<i64>, DbErr> {
+    ) -> Result<Option<u64>, DbErr> {
         match Block::find()
             .filter(model::block::Column::BlockHash.eq(block_hash))
             .one(self.db)
@@ -110,12 +100,9 @@ impl<'a> CheckpointService<'a> {
     /// Fetch a checkpoint by its L2 block height
     pub async fn get_checkpoint_idx_by_block_height(
         &self,
-        block_height: i64,
-    ) -> Result<Option<i64>, DbErr> {
-        tracing::debug!(
-            "Searching for block with height: {}",
-            PgU64::i64_to_u64(block_height)
-        );
+        block_height: u64,
+    ) -> Result<Option<u64>, DbErr> {
+        tracing::debug!("Searching for block with height: {}", block_height);
 
         match Block::find()
             .filter(model::block::Column::Height.eq(block_height))
@@ -127,10 +114,7 @@ impl<'a> CheckpointService<'a> {
                 Ok(Some(block.checkpoint_idx))
             }
             Ok(None) => {
-                tracing::debug!(
-                    "No block found for height: {}",
-                    PgU64::i64_to_u64(block_height)
-                );
+                tracing::debug!("No block found for height: {}", block_height);
                 Ok(None)
             }
             Err(err) => {
@@ -151,7 +135,6 @@ impl<'a> CheckpointService<'a> {
         let total_pages = (total_checkpoints as f64 / page_size as f64).ceil() as u64;
         let offset = (current_page - absolute_first_page) * page_size; // Adjust based on the first page
         let order = resolve_order(order);
-        // Convert `u64` to `i64` for compatibility with PostgreSQL
         let offset = offset.try_into().ok();
         let limit = page_size.try_into().ok();
 
@@ -192,13 +175,13 @@ impl<'a> CheckpointService<'a> {
     }
 
     /// Get the latest checkpoint index stored in the database
-    pub async fn get_latest_checkpoint_index(&self) -> Option<i64> {
+    pub async fn get_latest_checkpoint_index(&self) -> Option<u64> {
         use sea_orm::entity::prelude::*;
 
         match Checkpoint::find()
             .select_only()
             .column_as(model::checkpoint::Column::Idx.max(), "max_idx")
-            .into_tuple::<Option<i64>>() // Fetch the max value as a tuple
+            .into_tuple::<Option<u64>>()
             .one(self.db)
             .await
         {
@@ -212,7 +195,7 @@ impl<'a> CheckpointService<'a> {
     }
 
     /// Get the earliest checkpoint index whose status is either `Pending` or `Confirmed` or `-`
-    pub async fn get_earliest_unfinalized_checkpoint_idx(&self) -> Option<i64> {
+    pub async fn get_earliest_unfinalized_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -235,7 +218,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the earliest checkpoint index whose status is `Pending`
-    pub async fn get_earliest_pending_checkpoint_idx(&self) -> Option<i64> {
+    pub async fn get_earliest_pending_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -253,7 +236,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the earliest checkpoint index whose status is `Pending`
-    pub async fn get_earliest_confirmed_checkpoint_idx(&self) -> Option<i64> {
+    pub async fn get_earliest_confirmed_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -271,7 +254,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the earliest checkpoint index whose status is `Pending`
-    pub async fn get_last_finalized_checkpoint_idx(&self) -> Option<i64> {
+    pub async fn get_last_finalized_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -292,7 +275,7 @@ impl<'a> CheckpointService<'a> {
     /// Update the status of a checkpoint
     pub async fn update_checkpoint(
         &self,
-        checkpoint_idx: i64,
+        checkpoint_idx: u64,
         updated_checkpoint: RpcCheckpointInfo,
     ) -> Result<(), DbErr> {
         match Checkpoint::find()
@@ -309,37 +292,29 @@ impl<'a> CheckpointService<'a> {
 
                 match active_model.update(self.db).await {
                     Ok(_) => {
-                        info!(
-                            "Checkpoint with idx {} updated successfully",
-                            PgU64::i64_to_u64(checkpoint_idx)
-                        );
+                        info!("Checkpoint with idx {} updated successfully", checkpoint_idx);
                         Ok(())
                     }
                     Err(err) => {
                         error!(
                             "Failed to update checkpoint with idx {}: {:?}",
-                            PgU64::i64_to_u64(checkpoint_idx),
-                            err
+                            checkpoint_idx, err
                         );
                         Err(err)
                     }
                 }
             }
             Ok(None) => {
-                error!(
-                    "Checkpoint with idx {} not found",
-                    PgU64::i64_to_u64(checkpoint_idx)
-                );
+                error!("Checkpoint with idx {} not found", checkpoint_idx);
                 Err(DbErr::RecordNotFound(format!(
                     "Checkpoint with idx {} not found",
-                    PgU64::i64_to_u64(checkpoint_idx)
+                    checkpoint_idx
                 )))
             }
             Err(err) => {
                 error!(
                     "Error querying checkpoint with idx {}: {:?}",
-                    PgU64::i64_to_u64(checkpoint_idx),
-                    err
+                    checkpoint_idx, err
                 );
                 Err(err)
             }
