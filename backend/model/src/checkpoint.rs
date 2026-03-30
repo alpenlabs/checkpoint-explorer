@@ -86,7 +86,7 @@ impl Display for RpcCheckpointConfStatus {
 )]
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
-    #[sea_orm(primary_key)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub idx: u64,
     pub l1_start: u64,
     pub l1_end: u64,

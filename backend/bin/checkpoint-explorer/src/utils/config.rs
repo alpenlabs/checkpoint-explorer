@@ -51,4 +51,13 @@ pub struct Config {
         help = "Strata URL"
     )]
     pub strata_url: String,
+
+    /// The port the HTTP server listens on
+    #[arg(
+        long,
+        env = "APP_SERVER_PORT",
+        default_value_t = 3000,
+        help = "HTTP server port"
+    )]
+    pub server_port: u16,
 }

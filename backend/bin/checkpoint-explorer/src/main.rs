@@ -4,7 +4,8 @@ mod utils;
 
 use axum::{routing::get, Router};
 use clap::Parser;
-use database::{connection::DatabaseWrapper, services::utils::wait_until_migration};
+use database::connection::DatabaseWrapper;
+use migration::{Migrator, MigratorTrait};
 use dotenvy::dotenv;
 use fullnode_client::fetcher::StrataFetcher;
 use reqwest::Method;
@@ -35,7 +36,9 @@ async fn main() {
     let database = Arc::new(DatabaseWrapper::new(&config.database_url).await);
     let fetcher = Arc::new(StrataFetcher::new(config.strata_fullnode));
 
-    wait_until_migration(&database).await;
+    Migrator::up(&database.db, None)
+        .await
+        .expect("Failed to run database migrations");
 
     // Channels for communication between checkpoint fetcher and block fetcher
     let (tx, rx) = mpsc::channel(100);
@@ -85,7 +88,7 @@ async fn main() {
         .with_state(database.clone());
 
     // Start the server
-    let addr = "0.0.0.0:3000".parse().unwrap();
+    let addr = format!("0.0.0.0:{}", config.server_port).parse().unwrap();
     info!("Listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.layer(cors).into_make_service())
