@@ -18,7 +18,7 @@ const CheckpointDetails = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [firstPage, setFirstPage] = useState(0);
   const rowsPerPage = 1; // Fixed value
-  const { apiBaseUrl, alpenExplorerBaseUrl, bitcoinExplorerBaseUrl } =
+  const { apiBaseUrl, bitcoinExplorerBaseUrl } =
     useConfig();
 
   useEffect(() => {
@@ -106,27 +106,15 @@ const CheckpointDetails = () => {
           </span>
         </div>
         <div className={styles.checkpointRow}>
-          <span className={styles.checkpointLabel}>Alpen start block:</span>
+          <span className={styles.checkpointLabel}>Strata start block:</span>
           <span className={styles.checkpointValue}>
-            <a
-              href={`${alpenExplorerBaseUrl}/block/${checkpoint.l2_range[0]}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {checkpoint.l2_range[0]}
-            </a>
+            {checkpoint.l2_range[0]}
           </span>
         </div>
         <div className={styles.checkpointRow}>
-          <span className={styles.checkpointLabel}>Alpen end block:</span>
+          <span className={styles.checkpointLabel}>Strata end block:</span>
           <span className={styles.checkpointValue}>
-            <a
-              href={`${alpenExplorerBaseUrl}/block/${checkpoint.l2_range[1]}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {checkpoint.l2_range[1]}
-            </a>
+            {checkpoint.l2_range[1]}
           </span>
         </div>
       </div>

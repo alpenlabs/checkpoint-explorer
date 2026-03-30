@@ -18,7 +18,6 @@ const TableBody: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(pageFromUrl);
   const {
     apiBaseUrl,
-    alpenExplorerBaseUrl,
     bitcoinExplorerBaseUrl,
     refreshIntervalS,
   } = useConfig();
@@ -78,8 +77,8 @@ const TableBody: React.FC = () => {
               <th className={styles.tableHeader}>Status</th>
               <th className={styles.tableHeader}>Signet start block</th>
               <th className={styles.tableHeader}>Signet end block</th>
-              <th className={styles.tableHeader}>Alpen start block</th>
-              <th className={styles.tableHeader}>Alpen end block</th>
+              <th className={styles.tableHeader}>Strata start block</th>
+              <th className={styles.tableHeader}>Strata end block</th>
             </tr>
           </thead>
           <tbody>
@@ -131,22 +130,10 @@ const TableBody: React.FC = () => {
                   </a>
                 </td>
                 <td className={styles.tableCell}>
-                  <a
-                    href={`${alpenExplorerBaseUrl}/block/${checkpoint.l2_range[0]}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {checkpoint.l2_range[0]}
-                  </a>
+                  {checkpoint.l2_range[0]}
                 </td>
                 <td className={styles.tableCell}>
-                  <a
-                    href={`${alpenExplorerBaseUrl}/block/${checkpoint.l2_range[1]}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {checkpoint.l2_range[1]}
-                  </a>
+                  {checkpoint.l2_range[1]}
                 </td>
               </tr>
             ))}
