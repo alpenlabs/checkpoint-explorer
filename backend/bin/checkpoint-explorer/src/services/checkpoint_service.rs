@@ -68,7 +68,7 @@ async fn fetch_checkpoints(
 }
 
 /// It is a helper function that returns the starting checkpoint index to start fetching from
-/// It will return the minimum of the last checkpoint in the database and the checkpoint correcpoinding to
+/// It will return the minimum of the last checkpoint in the database and the checkpoint corresponding to
 /// last block in the database
 async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u64> {
     let checkpoint_db = CheckpointService::new(&db.db);

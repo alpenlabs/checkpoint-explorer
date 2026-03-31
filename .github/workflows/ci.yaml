@@ -31,8 +31,6 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
-        with:
-          working-directory: functional-tests
 
       - name: Install Python dependencies
         working-directory: functional-tests

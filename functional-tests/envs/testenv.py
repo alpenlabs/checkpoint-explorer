@@ -1,3 +1,4 @@
+import os
 import time
 
 import flexitest
@@ -76,10 +77,12 @@ class ExplorerEnvConfig(flexitest.EnvConfig):
         database = DatabaseService(port=_DB_PORT)
         database.start()
 
+        datadir = ectx.make_service_dir("backend")
         backend = BackendService(
             port=_BACKEND_PORT,
             fullnode_url=fullnode.url,
             database_url=database.url,
+            log_file=os.path.join(datadir, "service.log"),
         )
         backend.start()
 

@@ -15,12 +15,5 @@ export interface PaginatedData<T> {
 }
 
 export interface CheckpointL1Ref {
-  l1_commitment: L1BlockCommitment;
   txid: string;
-  wtxid: string;
-}
-
-export interface L1BlockCommitment {
-  height: number;
-  blkid: string;
 }

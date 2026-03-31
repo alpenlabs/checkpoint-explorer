@@ -119,6 +119,12 @@ impl From<RpcCheckpointInfo> for ActiveModel {
     }
 }
 
+/// Minimal L1 reference for the explorer response — only the txid is stored in the DB.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExplorerL1Ref {
+    pub txid: String,
+}
+
 /// Represents the checkpoint information returned by the RPC to the frontend.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfoCheckpointExp {
@@ -128,8 +134,8 @@ pub struct RpcCheckpointInfoCheckpointExp {
     pub l1_range: (u64, u64),
     /// The L2 height range that the checkpoint covers (start, end)
     pub l2_range: (u64, u64),
-    /// Info on txn where checkpoint is committed on chain
-    pub l1_reference: Option<RpcCheckpointL1Ref>,
+    /// Txid of the L1 transaction where the checkpoint was committed (None if not yet committed)
+    pub l1_reference: Option<ExplorerL1Ref>,
     /// Confirmation status of checkpoint
     pub confirmation_status: Option<RpcCheckpointConfStatus>,
 }
@@ -140,13 +146,12 @@ impl From<Model> for RpcCheckpointInfoCheckpointExp {
             idx: model.idx,
             l1_range: (model.l1_start, model.l1_end),
             l2_range: (model.l2_start, model.l2_end),
-            l1_reference: Some(RpcCheckpointL1Ref {
-                block_height: 0,
-                block_id: "dummy".to_string(),
-                txid: model.checkpoint_txid.clone(),
-                wtxid: "dummy".to_string(),
-            }),
-            confirmation_status: model.status.parse().ok(),
+            l1_reference: if model.checkpoint_txid == "-" {
+                None
+            } else {
+                Some(ExplorerL1Ref { txid: model.checkpoint_txid })
+            },
+            confirmation_status: model.status.parse().ok(), // Convert status string to RpcCheckpointConfStatus via FromStr
         }
     }
 }

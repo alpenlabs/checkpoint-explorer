@@ -4,7 +4,6 @@ import os
 import subprocess
 import time
 from pathlib import Path
-
 import requests
 
 
@@ -36,6 +35,7 @@ class BackendService:
         database_url: str,
         fetch_interval: int = 1,
         status_update_interval: int = 1,
+        log_file: str | None = None,
     ):
         self.port = port
         self.base_url = f"http://127.0.0.1:{port}"
@@ -48,15 +48,23 @@ class BackendService:
             "APP_STATUS_UPDATE_INTERVAL": str(status_update_interval),
             "RUST_LOG": "warn",
         }
+        self._log_file = log_file
         self._proc: subprocess.Popen | None = None
 
     def start(self):
         binary = _find_binary()
+        if self._log_file is not None:
+            fh = open(self._log_file, "a")
+            fh.write(f"(process started as: {binary})\n")
+            fh.flush()
+            stdout = stderr = fh  # stderr captures Rust panics too
+        else:
+            stdout = stderr = subprocess.DEVNULL
         self._proc = subprocess.Popen(
             [binary],
             env=self._env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
         )
         self._wait_ready()
 
