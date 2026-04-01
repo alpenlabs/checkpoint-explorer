@@ -23,7 +23,7 @@ pub async fn run_block_fetcher(
 ) {
     info!("Starting block fetcher...");
     while let Some(CheckpointFetch { idx }) = rx.recv().await {
-        debug!("Received checkpoint: {:?}", idx);
+        debug!(idx, "Received checkpoint");
         fetch_blocks_in_checkpoint(fetcher.clone(), database.clone(), idx).await;
     }
 }
@@ -51,13 +51,10 @@ async fn fetch_blocks_in_checkpoint(
             }
         }
         if start > end {
-            info!("No blocks to fetch for checkpoint {}", checkpoint_idx);
+            info!(checkpoint_idx, "No blocks to fetch");
             return;
         }
-        info!(
-            "Fetching blocks from {} to {} for checkpoint {}",
-            start, end, checkpoint_idx
-        );
+        info!(start, end, checkpoint_idx, "Fetching blocks");
         for block_height in start..=end {
             if let Ok(block_headers) = fetcher
                 .fetch_data::<Vec<RpcBlockHeader>>("strata_getHeadersAtIdx", block_height)

@@ -23,7 +23,7 @@ pub async fn start_checkpoint_fetcher(
         interval.tick().await;
         match fetch_checkpoints(fetcher.clone(), database.clone(), tx.clone()).await {
             Ok(_) => (),
-            Err(e) => tracing::error!("Error fetching checkpoints: {}", e),
+            Err(e) => error!(?e, "Failed to fetch checkpoints"),
         }
     }
 }
@@ -48,12 +48,13 @@ async fn fetch_checkpoints(
     let fn_chkpt = fullnode_last_checkpoint.unwrap();
     let starting_checkpoint = get_starting_checkpoint_idx(database.clone()).await?;
     info!(
-        "latest checkpoint index in fullnode: {}, local checkpoint to start block indexing from: {}",
-        fn_chkpt, starting_checkpoint
+        fullnode_latest = fn_chkpt,
+        local_start = starting_checkpoint,
+        "Checkpoint sync range"
     );
     for idx in starting_checkpoint..=fn_chkpt {
         if !checkpoint_db.checkpoint_exists(idx).await {
-            info!("Checkpoint does not exist in db, fetching checkpoint with idx {}", idx);
+            info!(idx, "Checkpoint not in db, fetching");
             if let Ok(checkpoint) = fetcher
                 .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
                 .await
@@ -117,7 +118,7 @@ pub async fn start_checkpoint_status_updater_task(
                 update_checkpoints_status(fetcher_clone.clone(), database_clone.clone(), "pending")
                     .await
             {
-                tracing::error!("Error fetching pending checkpoints: {}", e);
+                error!(status = "pending", ?e, "Failed to update checkpoint statuses");
             }
         }
     });
@@ -132,7 +133,7 @@ pub async fn start_checkpoint_status_updater_task(
             if let Err(e) =
                 update_checkpoints_status(fetcher.clone(), database.clone(), "confirmed").await
             {
-                tracing::error!("Error fetching confirmed checkpoints: {}", e);
+                error!(status = "confirmed", ?e, "Failed to update checkpoint statuses");
             }
         }
     });
@@ -189,14 +190,14 @@ async fn update_checkpoints_status(
             .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
             .await
         else {
-            warn!("Checkpoint not found in fullnode for idx {}", idx);
+            warn!(idx, "Checkpoint not found in fullnode");
             return Ok(());
         };
 
         let status = match checkpoint_from_rpc.confirmation_status {
             Some(status) => status.to_string(),
             None => {
-                warn!("Checkpoint status is None for idx {}", idx);
+                warn!(idx, "Checkpoint status is None");
                 return Ok(()); // Simply return and continue execution instead of erroring
             }
         };
@@ -211,14 +212,14 @@ async fn update_checkpoints_status(
             return Ok(());
         }
 
-        info!("Updating checkpoint status: idx={}, status={}", idx, status.clone());
+        info!(idx, %status, "Updating checkpoint status");
         // update the db with the new checkpoint record instead of tweaking the existing one
         // as there could be change in both status and txid
         checkpoint_db
             .update_checkpoint(idx, checkpoint_from_rpc)
             .await
             .map_err(|e| {
-                error!("Error updating checkpoint status: {:?}", e);
+                error!(?e, "Failed to update checkpoint status");
                 anyhow::anyhow!("Failed to update checkpoint status")
             })?;
 

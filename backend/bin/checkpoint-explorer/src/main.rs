@@ -89,7 +89,7 @@ async fn main() {
 
     // Start the server
     let addr = format!("0.0.0.0:{}", config.server_port).parse().unwrap();
-    info!("Listening on {}", addr);
+    info!(%addr, "Server started");
     axum::Server::bind(&addr)
         .serve(app.layer(cors).into_make_service())
         .await

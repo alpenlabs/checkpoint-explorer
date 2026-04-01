@@ -8,6 +8,7 @@ use std::str::FromStr;
 /// Represents an L2 Block ID.
 pub type L2BlockId = String;
 pub type L1BlockId = String;
+pub type Txid = String;
 
 /// Represents the checkpoint information returned by the RPC.
 /// Name for this struct comes from the Strata RPC endpoint.
@@ -122,7 +123,7 @@ impl From<RpcCheckpointInfo> for ActiveModel {
 /// Minimal L1 reference for the explorer response — only the txid is stored in the DB.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExplorerL1Ref {
-    pub txid: String,
+    pub txid: Txid,
 }
 
 /// Represents the checkpoint information returned by the RPC to the frontend.

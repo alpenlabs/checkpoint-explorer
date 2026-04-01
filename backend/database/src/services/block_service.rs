@@ -1,6 +1,6 @@
 use model::block::{ActiveModel as BlockActiveModel, Entity as Block, RpcBlockHeader};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
-use tracing::error;
+use tracing::{debug, error};
 
 /// Wrapper around the database connection
 pub struct BlockService<'a> {
@@ -21,7 +21,7 @@ impl<'a> BlockService<'a> {
 
         // If block already exists locally do nothing
         if self.block_exists(height).await {
-            tracing::debug!("Block already exists, height={}", height);
+            debug!(height, "Block already exists");
             return;
         }
         // ensure that blocks exist incrementally and continuously
@@ -35,14 +35,10 @@ impl<'a> BlockService<'a> {
         // Insert the block using the Entity::insert() method
         match Block::insert(active_model).exec(self.db).await {
             Ok(_) => {
-                tracing::debug!(
-                    "Block inserted & indexed successfully: height={}, block_hash={}",
-                    height,
-                    block_id
-                );
+                debug!(height, %block_id, "Block inserted and indexed");
             }
             Err(err) => {
-                tracing::error!("Error inserting block with height {}: {:?}", height, err);
+                error!(height, ?err, "Failed to insert block");
             }
         }
     }
@@ -59,7 +55,7 @@ impl<'a> BlockService<'a> {
             Ok(Some(max_height)) => max_height,
             Ok(_) => None, // If no blocks exist, return None
             Err(err) => {
-                error!("Failed to fetch the latest block index: {:?}", err);
+                error!(?err, "Failed to fetch latest block index");
                 None
             }
         }

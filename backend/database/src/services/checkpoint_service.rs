@@ -10,7 +10,7 @@ use sea_orm::{
     prelude::*, ColumnTrait, DatabaseConnection, EntityTrait, Order, QueryFilter, QueryOrder,
     QuerySelect,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 pub struct CheckpointService<'a> {
     pub db: &'a DatabaseConnection,
 }
@@ -39,11 +39,7 @@ impl<'a> CheckpointService<'a> {
 
             // checkpoints must be continuous, better to restart to re-sync from a valid checkpoint
             if !previous_checkpoint_exists {
-                error!(
-                    "Cannot insert checkpoint with idx {}: previous checkpoint with idx {} does not exist",
-                    idx,
-                    previous_idx
-                );
+                error!(idx, previous_idx, "Cannot insert checkpoint: previous does not exist");
                 return;
             }
         }
@@ -51,8 +47,8 @@ impl<'a> CheckpointService<'a> {
         // Insert the checkpoint
         let active_model: ActiveModel = checkpoint.into();
         match Checkpoint::insert(active_model).exec(self.db).await {
-            Ok(_) => info!("Checkpoint with idx {} inserted successfully", idx),
-            Err(err) => error!("Error inserting checkpoint with idx {}: {:?}", idx, err),
+            Ok(_) => info!(idx, "Checkpoint inserted"),
+            Err(err) => error!(idx, ?err, "Failed to insert checkpoint"),
         }
     }
 
@@ -66,7 +62,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(checkpoint)) => Some(checkpoint.into()),
             Ok(None) => None,
             Err(err) => {
-                error!("Error fetching checkpoint by idx: {:?}", err);
+                error!(?err, "Failed to fetch checkpoint");
                 None
             }
         }
@@ -83,15 +79,15 @@ impl<'a> CheckpointService<'a> {
             .await
         {
             Ok(Some(block)) => {
-                tracing::debug!("Block found: {:?}", block);
+                debug!(?block, "Block found");
                 Ok(Some(block.checkpoint_idx))
             }
             Ok(None) => {
-                tracing::debug!("No block found for hash: {}", block_hash);
+                debug!(%block_hash, "No block found");
                 Ok(None)
             }
             Err(err) => {
-                tracing::error!("Query failed: {:?}", err);
+                error!(?err, "Query failed");
                 Err(err)
             }
         }
@@ -102,7 +98,7 @@ impl<'a> CheckpointService<'a> {
         &self,
         block_height: u64,
     ) -> Result<Option<u64>, DbErr> {
-        tracing::debug!("Searching for block with height: {}", block_height);
+        debug!(block_height, "Searching for block");
 
         match Block::find()
             .filter(model::block::Column::Height.eq(block_height))
@@ -110,15 +106,15 @@ impl<'a> CheckpointService<'a> {
             .await
         {
             Ok(Some(block)) => {
-                tracing::debug!("Block found: {:?}", block);
+                debug!(?block, "Block found");
                 Ok(Some(block.checkpoint_idx))
             }
             Ok(None) => {
-                tracing::debug!("No block found for height: {}", block_height);
+                debug!(block_height, "No block found");
                 Ok(None)
             }
             Err(err) => {
-                tracing::error!("Query failed: {:?}", err);
+                error!(?err, "Query failed");
                 Err(err)
             }
         }
@@ -148,7 +144,7 @@ impl<'a> CheckpointService<'a> {
         {
             Ok(checkpoints) => checkpoints.into_iter().map(Into::into).collect(),
             Err(err) => {
-                error!("Error fetching paginated checkpoints: {:?}", err);
+                error!(?err, "Failed to fetch paginated checkpoints");
                 vec![]
             }
         };
@@ -168,7 +164,7 @@ impl<'a> CheckpointService<'a> {
         match Checkpoint::find().count(self.db).await {
             Ok(count) => count,
             Err(err) => {
-                error!("Failed to count checkpoints: {:?}", err);
+                error!(?err, "Failed to count checkpoints");
                 0
             }
         }
@@ -188,7 +184,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(max_idx)) => max_idx,
             Ok(_) => None, // If no checkpoints exist, return None
             Err(err) => {
-                error!("Failed to fetch the latest checkpoint index: {:?}", err);
+                error!(?err, "Failed to fetch latest checkpoint index");
                 None
             }
         }
@@ -212,7 +208,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(checkpoint)) => Some(checkpoint.idx),
             Ok(None) => None,
             Err(err) => {
-                error!("Error fetching earliest unfinalized checkpoint: {:?}", err);
+                error!(?err, "Failed to fetch earliest unfinalized checkpoint");
                 None
             }
         }
@@ -230,7 +226,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(checkpoint)) => Some(checkpoint.idx),
             Ok(None) => None,
             Err(err) => {
-                error!("Error fetching earliest pending checkpoint: {:?}", err);
+                error!(?err, "Failed to fetch earliest pending checkpoint");
                 None
             }
         }
@@ -248,7 +244,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(checkpoint)) => Some(checkpoint.idx),
             Ok(None) => None,
             Err(err) => {
-                error!("Error fetching earliest confirmed checkpoint: {:?}", err);
+                error!(?err, "Failed to fetch earliest confirmed checkpoint");
                 None
             }
         }
@@ -266,7 +262,7 @@ impl<'a> CheckpointService<'a> {
             Ok(Some(checkpoint)) => Some(checkpoint.idx),
             Ok(None) => None,
             Err(err) => {
-                error!("Error fetching last finalized checkpoint: {:?}", err);
+                error!(?err, "Failed to fetch last finalized checkpoint");
                 None
             }
         }
@@ -292,30 +288,20 @@ impl<'a> CheckpointService<'a> {
 
                 match active_model.update(self.db).await {
                     Ok(_) => {
-                        info!("Checkpoint with idx {} updated successfully", checkpoint_idx);
+                        info!(checkpoint_idx, "Checkpoint updated");
                         Ok(())
                     }
                     Err(err) => {
-                        error!(
-                            "Failed to update checkpoint with idx {}: {:?}",
-                            checkpoint_idx, err
-                        );
+                        error!(checkpoint_idx, ?err, "Failed to update checkpoint");
                         Err(err)
                     }
                 }
             }
-            Ok(None) => {
-                error!("Checkpoint with idx {} not found", checkpoint_idx);
-                Err(DbErr::RecordNotFound(format!(
-                    "Checkpoint with idx {} not found",
-                    checkpoint_idx
-                )))
-            }
+            // idx is omitted from the error string — the caller logs it as a structured field
+            // before invoking this function, so it will appear in the surrounding log context.
+            Ok(None) => Err(DbErr::RecordNotFound("checkpoint not found".into())),
             Err(err) => {
-                error!(
-                    "Error querying checkpoint with idx {}: {:?}",
-                    checkpoint_idx, err
-                );
+                error!(checkpoint_idx, ?err, "Failed to query checkpoint");
                 Err(err)
             }
         }
