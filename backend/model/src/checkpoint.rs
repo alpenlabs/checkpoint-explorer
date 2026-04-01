@@ -66,7 +66,7 @@ impl FromStr for RpcCheckpointConfStatus {
             "pending" => Ok(RpcCheckpointConfStatus::Pending),
             "confirmed" => Ok(RpcCheckpointConfStatus::Confirmed),
             "finalized" => Ok(RpcCheckpointConfStatus::Finalized),
-            _ => Err(Error::msg(format!("Invalid status: {}", s))),
+            _ => Err(Error::msg(format!("Invalid status: {s}"))),
         }
     }
 }
@@ -78,7 +78,7 @@ impl Display for RpcCheckpointConfStatus {
             RpcCheckpointConfStatus::Confirmed => "confirmed",
             RpcCheckpointConfStatus::Finalized => "finalized",
         };
-        write!(f, "{}", status_str)
+        write!(f, "{status_str}")
     }
 }
 
@@ -115,7 +115,7 @@ impl From<RpcCheckpointInfo> for ActiveModel {
             status: Set(info
                 .confirmation_status
                 .as_ref()
-                .map_or("-".to_string(), |s| format!("{:?}", s))),
+                .map_or("-".to_string(), |s| format!("{s:?}"))),
         }
     }
 }
@@ -150,7 +150,9 @@ impl From<Model> for RpcCheckpointInfoCheckpointExp {
             l1_reference: if model.checkpoint_txid == "-" {
                 None
             } else {
-                Some(ExplorerL1Ref { txid: model.checkpoint_txid })
+                Some(ExplorerL1Ref {
+                    txid: model.checkpoint_txid,
+                })
             },
             confirmation_status: model.status.parse().ok(), // Convert status string to RpcCheckpointConfStatus via FromStr
         }

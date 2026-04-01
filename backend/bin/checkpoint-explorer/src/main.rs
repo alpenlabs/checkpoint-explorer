@@ -5,9 +5,9 @@ mod utils;
 use axum::{routing::get, Router};
 use clap::Parser;
 use database::connection::DatabaseWrapper;
-use migration::{Migrator, MigratorTrait};
 use dotenvy::dotenv;
 use fullnode_client::fetcher::StrataFetcher;
+use migration::{Migrator, MigratorTrait};
 use reqwest::Method;
 use services::{
     block_service::run_block_fetcher,

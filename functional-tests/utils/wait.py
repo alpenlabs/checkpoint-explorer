@@ -1,6 +1,7 @@
 import math
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def wait_until(

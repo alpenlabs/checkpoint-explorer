@@ -118,7 +118,11 @@ pub async fn start_checkpoint_status_updater_task(
                 update_checkpoints_status(fetcher_clone.clone(), database_clone.clone(), "pending")
                     .await
             {
-                error!(status = "pending", ?e, "Failed to update checkpoint statuses");
+                error!(
+                    status = "pending",
+                    ?e,
+                    "Failed to update checkpoint statuses"
+                );
             }
         }
     });
@@ -133,7 +137,11 @@ pub async fn start_checkpoint_status_updater_task(
             if let Err(e) =
                 update_checkpoints_status(fetcher.clone(), database.clone(), "confirmed").await
             {
-                error!(status = "confirmed", ?e, "Failed to update checkpoint statuses");
+                error!(
+                    status = "confirmed",
+                    ?e,
+                    "Failed to update checkpoint statuses"
+                );
             }
         }
     });
@@ -206,7 +214,7 @@ async fn update_checkpoints_status(
         if checkpoint_in_db
             .confirmation_status
             .map_or("-".to_string(), |s| s.to_string())
-            == status.to_string()
+            == status
         {
             // if the status is unchanged then do nothing
             return Ok(());

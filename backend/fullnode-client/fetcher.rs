@@ -38,7 +38,7 @@ impl StrataFetcher {
             .json(&payload)
             .send()
             .await
-            .with_context(|| format!("Failed to send request for method: {}", method))?;
+            .with_context(|| format!("Failed to send {method} request"))?;
 
         let status = response.status();
         let text = response
@@ -110,18 +110,16 @@ impl StrataFetcher {
             Some(Value::Null) | None => {
                 anyhow::bail!("No data exists for index ID: {}", idx);
             }
-            Some(result) => {
-                match serde_json::from_value::<T>(result.clone()) {
-                    Ok(data) => Ok(data),
-                    Err(e) => {
-                        error!(idx, ?e, "Deserialization failed");
-                        Err(anyhow::anyhow!(
-                            "Failed to deserialize response data: {:?}",
-                            e
-                        ))
-                    }
+            Some(result) => match serde_json::from_value::<T>(result.clone()) {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    error!(idx, ?e, "Deserialization failed");
+                    Err(anyhow::anyhow!(
+                        "Failed to deserialize response data: {:?}",
+                        e
+                    ))
                 }
-            }
+            },
         }
     }
 }

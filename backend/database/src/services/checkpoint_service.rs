@@ -39,7 +39,10 @@ impl<'a> CheckpointService<'a> {
 
             // checkpoints must be continuous, better to restart to re-sync from a valid checkpoint
             if !previous_checkpoint_exists {
-                error!(idx, previous_idx, "Cannot insert checkpoint: previous does not exist");
+                error!(
+                    idx,
+                    previous_idx, "Cannot insert checkpoint: previous does not exist"
+                );
                 return;
             }
         }
@@ -131,8 +134,8 @@ impl<'a> CheckpointService<'a> {
         let total_pages = (total_checkpoints as f64 / page_size as f64).ceil() as u64;
         let offset = (current_page - absolute_first_page) * page_size; // Adjust based on the first page
         let order = resolve_order(order);
-        let offset = offset.try_into().ok();
-        let limit = page_size.try_into().ok();
+        let offset = Some(offset);
+        let limit = Some(page_size);
 
         let items = match Checkpoint::find()
             .filter(Expr::col(model::checkpoint::Column::Idx).is_not_null()) // Ensure idx is not NULL

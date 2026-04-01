@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
+
 import requests
 
 
@@ -50,14 +51,15 @@ class BackendService:
         }
         self._log_file = log_file
         self._proc: subprocess.Popen | None = None
+        self._log_fh = None
 
     def start(self):
         binary = _find_binary()
         if self._log_file is not None:
-            fh = open(self._log_file, "a")
-            fh.write(f"(process started as: {binary})\n")
-            fh.flush()
-            stdout = stderr = fh  # stderr captures Rust panics too
+            self._log_fh = open(self._log_file, "a")  # noqa: SIM115
+            self._log_fh.write(f"(process started as: {binary})\n")
+            self._log_fh.flush()
+            stdout = stderr = self._log_fh  # stderr captures Rust panics too
         else:
             stdout = stderr = subprocess.DEVNULL
         self._proc = subprocess.Popen(
@@ -75,6 +77,9 @@ class BackendService:
                 self._proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 self._proc.kill()
+        if self._log_fh is not None:
+            self._log_fh.close()
+            self._log_fh = None
 
     def _wait_ready(self, timeout: int = 30):
         deadline = time.monotonic() + timeout

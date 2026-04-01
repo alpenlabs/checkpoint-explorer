@@ -1,11 +1,10 @@
 import os
-import time
 
 import flexitest
 
-from envs.services.mock_fullnode import MockFullnodeService
-from envs.services.database import DatabaseService
 from envs.services.backend import BackendService
+from envs.services.database import DatabaseService
+from envs.services.mock_fullnode import MockFullnodeService
 from utils.api_client import ExplorerApiClient
 from utils.wait import wait_until
 
