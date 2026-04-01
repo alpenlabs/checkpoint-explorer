@@ -1,61 +1,63 @@
 # Checkpoint Explorer
 
-## How to Run
-
-The easiest way to get everything up is to run
-`docker compose up frontend -d`
-
-## For development
-
-1. Make sure you have the following installed:
-
-* Node.js (≥ v18) – Install via nvm.
-* Rust (≥ 1.74) – Install using [the Rust installer](https://rustup.rs).
-* PostgreSQL (via Homebrew or system package manager)
+## Running the full stack with Docker
 
 ```sh
-brew install postgresql@15
-brew services start postgresql@15
+docker compose up --build -d
 ```
 
-* SQLx CLI (for running migrations):
+Starts three containers — MariaDB, the Rust backend (port `3000`), and the frontend (port `5173`). Migrations run automatically at backend startup.
+
+To tear down and wipe the database:
 
 ```sh
-cargo install sqlx-cli --no-default-features --features postgres
+docker compose down -v
 ```
 
-2. Create the database with
+## Running the backend using binary
+
+Start only the database:
 
 ```sh
-$ psql postgres << EOF
-CREATE USER postgres WITH PASSWORD 'password';
-ALTER USER postgres WITH SUPERUSER;
-CREATE DATABASE checkpoint_explorer_db OWNER postgres;
-EOF
+docker compose up -d mariadb
 ```
 
-3. Apply migrations with
+Then run the backend:
 
 ```sh
 cd backend
-export DATABASE_URL=postgres://postgres:password@localhost:5432/checkpoint_explorer_db
-cargo run --bin migration
-```
-
-4. Run the backend with
-
-```sh
-export APP_DATABASE_URL=postgres://postgres:password@localhost:5432/checkpoint_explorer_db
-export STRATA_FULLNODE=https://rpc.testnet-staging.stratabtc.org
-export APP_FETCH_INTERVAL=5
-
 cargo run --bin checkpoint-explorer
 ```
 
-5. Run the frontend with
+The backend reads config from environment variables — see `backend/.env.example`.
+
+## Running the frontend using npm
 
 ```sh
 cd frontend
 npm install
 npm run dev -- --host
+```
+
+## Prerequisites
+
+- Rust (stable) — [rustup](https://rustup.rs)
+- Node.js ≥ 18 — [nvm](https://github.com/nvm-sh/nvm)
+- [just](https://github.com/casey/just) — `cargo install just`
+
+## Functional tests
+
+Requires [uv](https://github.com/astral-sh/uv) and Docker (the test suite spins up an ephemeral MariaDB container).
+
+```sh
+cd functional-tests
+uv run python entry.py
+```
+
+## Code quality
+
+```sh
+just check      # fmt + clippy + ruff — run before pushing
+just lint-fix   # auto-fix clippy suggestions
+just fmt        # auto-format Rust code
 ```
