@@ -47,14 +47,18 @@ pub struct L2BlockCommitment {
     blkid: L2BlockId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
 #[serde(rename_all = "lowercase")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum RpcCheckpointConfStatus {
     /// Pending to be posted on L1
+    #[sea_orm(string_value = "Pending")]
     Pending,
     /// Confirmed on L1
+    #[sea_orm(string_value = "Confirmed")]
     Confirmed,
     /// Finalized on L1
+    #[sea_orm(string_value = "Finalized")]
     Finalized,
 }
 
@@ -93,8 +97,8 @@ pub struct Model {
     pub l1_end: u64,
     pub l2_start: u64,
     pub l2_end: u64,
-    pub checkpoint_txid: String,
-    pub status: String,
+    pub checkpoint_txid: Option<Txid>,
+    pub status: RpcCheckpointConfStatus,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -108,14 +112,10 @@ impl From<RpcCheckpointInfo> for ActiveModel {
             l1_end: Set(info.l1_range.1.height),
             l2_start: Set(info.l2_range.0.slot),
             l2_end: Set(info.l2_range.1.slot),
-            checkpoint_txid: Set(info
-                .l1_reference
-                .as_ref()
-                .map_or("-".to_string(), |c| c.txid.clone())),
+            checkpoint_txid: Set(info.l1_reference.as_ref().map(|c| c.txid.clone())),
             status: Set(info
                 .confirmation_status
-                .as_ref()
-                .map_or("-".to_string(), |s| format!("{s:?}"))),
+                .unwrap_or(RpcCheckpointConfStatus::Pending)),
         }
     }
 }
@@ -147,14 +147,8 @@ impl From<Model> for RpcCheckpointInfoCheckpointExp {
             idx: model.idx,
             l1_range: (model.l1_start, model.l1_end),
             l2_range: (model.l2_start, model.l2_end),
-            l1_reference: if model.checkpoint_txid == "-" {
-                None
-            } else {
-                Some(ExplorerL1Ref {
-                    txid: model.checkpoint_txid,
-                })
-            },
-            confirmation_status: model.status.parse().ok(), // Convert status string to RpcCheckpointConfStatus via FromStr
+            l1_reference: model.checkpoint_txid.map(|txid| ExplorerL1Ref { txid }),
+            confirmation_status: Some(model.status),
         }
     }
 }

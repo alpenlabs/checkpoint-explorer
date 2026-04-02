@@ -3,7 +3,8 @@ use crate::services::pagination::PaginatedData;
 use model::{
     block::Entity as Block,
     checkpoint::{
-        ActiveModel, Entity as Checkpoint, RpcCheckpointInfo, RpcCheckpointInfoCheckpointExp,
+        ActiveModel, Entity as Checkpoint, RpcCheckpointConfStatus, RpcCheckpointInfo,
+        RpcCheckpointInfoCheckpointExp,
     },
 };
 use sea_orm::{
@@ -193,17 +194,12 @@ impl<'a> CheckpointService<'a> {
         }
     }
 
-    /// Get the earliest checkpoint index whose status is either `Pending` or `Confirmed` or `-`
+    /// Get the earliest checkpoint index whose status is either `Pending` or `Confirmed`
     pub async fn get_earliest_unfinalized_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
-            .filter(
-                model::checkpoint::Column::Status
-                    .eq("Pending")
-                    .or(model::checkpoint::Column::Status.eq("Confirmed"))
-                    .or(model::checkpoint::Column::Status.eq("-")),
-            )
+            .filter(model::checkpoint::Column::Status.ne(RpcCheckpointConfStatus::Finalized))
             .order_by(model::checkpoint::Column::Idx, Order::Asc)
             .one(self.db)
             .await
@@ -221,7 +217,7 @@ impl<'a> CheckpointService<'a> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
-            .filter(model::checkpoint::Column::Status.eq("Pending"))
+            .filter(model::checkpoint::Column::Status.eq(RpcCheckpointConfStatus::Pending))
             .order_by(model::checkpoint::Column::Idx, Order::Asc)
             .one(self.db)
             .await
@@ -234,12 +230,12 @@ impl<'a> CheckpointService<'a> {
             }
         }
     }
-    /// Get the earliest checkpoint index whose status is `Pending`
+    /// Get the earliest checkpoint index whose status is `Confirmed`
     pub async fn get_earliest_confirmed_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
-            .filter(model::checkpoint::Column::Status.eq("Confirmed"))
+            .filter(model::checkpoint::Column::Status.eq(RpcCheckpointConfStatus::Confirmed))
             .order_by(model::checkpoint::Column::Idx, Order::Asc)
             .one(self.db)
             .await
@@ -252,12 +248,12 @@ impl<'a> CheckpointService<'a> {
             }
         }
     }
-    /// Get the earliest checkpoint index whose status is `Pending`
+    /// Get the last checkpoint index whose status is `Finalized`
     pub async fn get_last_finalized_checkpoint_idx(&self) -> Option<u64> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
-            .filter(model::checkpoint::Column::Status.eq("Finalized"))
+            .filter(model::checkpoint::Column::Status.eq(RpcCheckpointConfStatus::Finalized))
             .order_by(model::checkpoint::Column::Idx, Order::Desc)
             .one(self.db)
             .await

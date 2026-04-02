@@ -34,18 +34,8 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(Checkpoints::L2End).big_unsigned().not_null())
-                    .col(
-                        ColumnDef::new(Checkpoints::CheckpointTxid)
-                            .string()
-                            .not_null()
-                            .default("-"),
-                    )
-                    .col(
-                        ColumnDef::new(Checkpoints::Status)
-                            .string()
-                            .not_null()
-                            .default("-"),
-                    )
+                    .col(ColumnDef::new(Checkpoints::CheckpointTxid).string().null())
+                    .col(ColumnDef::new(Checkpoints::Status).string().not_null())
                     .to_owned(),
             )
             .await?;

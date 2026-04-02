@@ -2,7 +2,7 @@ use crate::services::block_service::CheckpointFetch;
 use database::connection::DatabaseWrapper;
 use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
 use fullnode_client::fetcher::StrataFetcher;
-use model::checkpoint::RpcCheckpointInfo;
+use model::checkpoint::{RpcCheckpointConfStatus, RpcCheckpointInfo};
 use std::cmp::min;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
@@ -114,9 +114,12 @@ pub async fn start_checkpoint_status_updater_task(
         loop {
             interval.tick().await;
 
-            if let Err(e) =
-                update_checkpoints_status(fetcher_clone.clone(), database_clone.clone(), "pending")
-                    .await
+            if let Err(e) = update_checkpoints_status(
+                fetcher_clone.clone(),
+                database_clone.clone(),
+                RpcCheckpointConfStatus::Pending,
+            )
+            .await
             {
                 error!(
                     status = "pending",
@@ -134,8 +137,12 @@ pub async fn start_checkpoint_status_updater_task(
         loop {
             interval.tick().await;
 
-            if let Err(e) =
-                update_checkpoints_status(fetcher.clone(), database.clone(), "confirmed").await
+            if let Err(e) = update_checkpoints_status(
+                fetcher.clone(),
+                database.clone(),
+                RpcCheckpointConfStatus::Confirmed,
+            )
+            .await
             {
                 error!(
                     status = "confirmed",
@@ -162,28 +169,30 @@ pub async fn start_checkpoint_status_updater_task(
 async fn update_checkpoints_status(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    status: &str,
+    status: RpcCheckpointConfStatus,
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
 
-    let mut idx: u64 = if status == "pending" {
-        match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
-            Some(i) => i,
-            None => {
-                info!("No more pending checkpoints locally.");
-                return Ok(());
+    let mut idx: u64 = match status {
+        RpcCheckpointConfStatus::Pending => {
+            match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
+                Some(i) => i,
+                None => {
+                    info!("No more pending checkpoints locally.");
+                    return Ok(());
+                }
             }
         }
-    } else if status == "confirmed" {
-        match checkpoint_db.get_earliest_confirmed_checkpoint_idx().await {
-            Some(i) => i,
-            None => {
-                info!("No more confirmed checkpoints locally.");
-                return Ok(());
+        RpcCheckpointConfStatus::Confirmed => {
+            match checkpoint_db.get_earliest_confirmed_checkpoint_idx().await {
+                Some(i) => i,
+                None => {
+                    info!("No more confirmed checkpoints locally.");
+                    return Ok(());
+                }
             }
         }
-    } else {
-        return Ok(());
+        RpcCheckpointConfStatus::Finalized => return Ok(()),
     };
 
     loop {
@@ -202,8 +211,8 @@ async fn update_checkpoints_status(
             return Ok(());
         };
 
-        let status = match checkpoint_from_rpc.confirmation_status {
-            Some(status) => status.to_string(),
+        let new_status = match checkpoint_from_rpc.confirmation_status {
+            Some(s) => s,
             None => {
                 warn!(idx, "Checkpoint status is None");
                 return Ok(()); // Simply return and continue execution instead of erroring
@@ -211,16 +220,11 @@ async fn update_checkpoints_status(
         };
 
         // if there is no change in status, return by doing nothing
-        if checkpoint_in_db
-            .confirmation_status
-            .map_or("-".to_string(), |s| s.to_string())
-            == status
-        {
-            // if the status is unchanged then do nothing
+        if checkpoint_in_db.confirmation_status == Some(new_status) {
             return Ok(());
         }
 
-        info!(idx, %status, "Updating checkpoint status");
+        info!(idx, %new_status, "Updating checkpoint status");
         // update the db with the new checkpoint record instead of tweaking the existing one
         // as there could be change in both status and txid
         checkpoint_db
