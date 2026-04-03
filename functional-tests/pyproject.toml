@@ -1,0 +1,31 @@
+[project]
+name = "checkpoint-explorer-functional-tests"
+version = "0.1.0"
+description = "Functional tests for the checkpoint explorer API"
+authors = []
+requires-python = ">=3.10"
+dependencies = [
+  "flexitest",
+  "requests>=2.32,<3",
+]
+
+[tool.uv.sources]
+flexitest = { git = "https://codeberg.org/treyd/flexitest.git" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tests", "utils", "envs"]
+
+[tool.ruff]
+line-length = 100
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]

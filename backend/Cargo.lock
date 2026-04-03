@@ -618,6 +618,7 @@ dependencies = [
  "dotenvy",
  "fullnode-client",
  "hex",
+ "migration",
  "model",
  "rand",
  "reqwest",

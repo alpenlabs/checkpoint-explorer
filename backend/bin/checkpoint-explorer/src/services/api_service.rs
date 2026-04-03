@@ -8,9 +8,9 @@ use axum::{
 use database::connection::DatabaseWrapper;
 use database::services::checkpoint_service::CheckpointService;
 use hex;
-use model::pgu64::PgU64;
 use serde_json::json;
 use std::sync::Arc;
+use tracing::{debug, info};
 pub async fn checkpoints(
     State(database): State<Arc<DatabaseWrapper>>,
     Query(params): Query<QueryParams>,
@@ -18,7 +18,7 @@ pub async fn checkpoints(
     let current_page = params.p.unwrap_or(1);
     let page_size = params.ps.unwrap_or(10);
     let error_msg = params.error_msg.clone();
-    tracing::debug!("error_msg: {:?}", error_msg);
+    debug!(?error_msg);
 
     let checkpoint_db = CheckpointService::new(&database.db);
     let paginated_data = checkpoint_db
@@ -52,13 +52,11 @@ pub async fn search(
 
     // Check if it's a valid block number
     if let Ok(block_number) = query.parse::<u64>() {
-        tracing::info!("Search request for block number: {}", block_number);
-        let block_number = PgU64(block_number).to_i64();
+        info!(block_number, "Search request");
         if let Ok(Some(checkpoint_idx)) = checkpoint_db
             .get_checkpoint_idx_by_block_height(block_number)
             .await
         {
-            let checkpoint_idx = PgU64::from_i64(checkpoint_idx).0;
             return Json(json!({"result": checkpoint_idx}));
         }
     }
@@ -72,14 +70,13 @@ pub async fn search(
     if query.len() == 64 {
         // Check if it's a valid hex string
         if hex::decode(query).is_ok() {
-            tracing::info!("Search request for block hash: {}", query);
+            info!(%query, "Search request for block hash");
             if let Ok(Some(checkpoint_idx)) =
                 checkpoint_db.get_checkpoint_idx_by_block_hash(query).await
             {
-                let checkpoint_idx = PgU64::from_i64(checkpoint_idx).0;
                 return Json(json!({"result": checkpoint_idx}));
             } else {
-                tracing::info!("No checkpoint found for block hash: {}", query);
+                info!(%query, "No checkpoint found for block hash");
             }
         }
     }

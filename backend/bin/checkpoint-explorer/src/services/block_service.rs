@@ -2,7 +2,6 @@ use database::connection::DatabaseWrapper;
 use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
 use fullnode_client::fetcher::StrataFetcher;
 use model::block::RpcBlockHeader;
-use model::pgu64::PgU64;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 use tracing::{debug, info};
@@ -10,10 +9,10 @@ use tracing::{debug, info};
 /// Event sent to block fetcher to request fetching of blocks for the checkpoint
 #[derive(Debug, Clone)]
 pub struct CheckpointFetch {
-    pub idx: i64,
+    pub idx: u64,
 }
 impl CheckpointFetch {
-    pub fn new(idx: i64) -> Self {
+    pub fn new(idx: u64) -> Self {
         Self { idx }
     }
 }
@@ -24,7 +23,7 @@ pub async fn run_block_fetcher(
 ) {
     info!("Starting block fetcher...");
     while let Some(CheckpointFetch { idx }) = rx.recv().await {
-        debug!("Received checkpoint: {:?}", PgU64::i64_to_u64(idx));
+        debug!(idx, "Received checkpoint");
         fetch_blocks_in_checkpoint(fetcher.clone(), database.clone(), idx).await;
     }
 }
@@ -32,7 +31,7 @@ pub async fn run_block_fetcher(
 async fn fetch_blocks_in_checkpoint(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    checkpoint_idx: i64,
+    checkpoint_idx: u64,
 ) {
     let checkpoint_db = CheckpointService::new(&database.db);
     let block_db = BlockService::new(&database.db);
@@ -42,29 +41,20 @@ async fn fetch_blocks_in_checkpoint(
         let end = c.l2_range.1;
 
         // we will reach this point only when we are sure that we must fetch from particular
-        // checkpoint. So having the heighest among the blocks must give us the shortcut
+        // checkpoint. So having the highest among the blocks must give us the shortcut
         // to determine the most optimal starting point.
         let last_block = block_db.get_latest_block_index().await;
         if let Some(last_block_height) = last_block {
-            let last_block_height_u64 = PgU64::from_i64(last_block_height).0;
             // start from the next block
-            if last_block_height_u64 >= start {
-                start = last_block_height_u64 + 1;
+            if last_block_height >= start {
+                start = last_block_height + 1;
             }
         }
         if start > end {
-            info!(
-                "No blocks to fetch for checkpoint {}",
-                PgU64::i64_to_u64(checkpoint_idx)
-            );
+            info!(checkpoint_idx, "No blocks to fetch");
             return;
         }
-        info!(
-            "Fetching blocks from {} to {} for checkpoint {}",
-            start,
-            end,
-            PgU64::i64_to_u64(checkpoint_idx)
-        );
+        info!(start, end, checkpoint_idx, "Fetching blocks");
         for block_height in start..=end {
             if let Ok(block_headers) = fetcher
                 .fetch_data::<Vec<RpcBlockHeader>>("strata_getHeadersAtIdx", block_height)

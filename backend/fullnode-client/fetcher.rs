@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::{json, Value};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 /// `StrataFetcher` struct for fetching checkpoint and block data
 pub struct StrataFetcher {
     client: Client,
@@ -38,7 +38,7 @@ impl StrataFetcher {
             .json(&payload)
             .send()
             .await
-            .with_context(|| format!("Failed to send request for method: {}", method))?;
+            .with_context(|| format!("Failed to send {method} request"))?;
 
         let status = response.status();
         let text = response
@@ -47,10 +47,8 @@ impl StrataFetcher {
             .context("Failed to read response body")?;
 
         if !status.is_success() {
-            error!(
-                "Request to {} failed with status {}: {}",
-                self.endpoint, status, text
-            );
+            error!(endpoint = %self.endpoint, %status, "Request failed");
+            debug!(body = %text, "Response body");
             return Err(anyhow::anyhow!(
                 "Request returned an error status: {} - {}",
                 status,
@@ -63,7 +61,7 @@ impl StrataFetcher {
 
         match json_response.get("result") {
             Some(Value::Null) => {
-                info!("No latest index found, returning None.");
+                info!("No latest index found");
                 Ok(None)
             }
             Some(Value::Number(n)) => n.as_u64().map(Some).ok_or_else(|| {
@@ -112,19 +110,16 @@ impl StrataFetcher {
             Some(Value::Null) | None => {
                 anyhow::bail!("No data exists for index ID: {}", idx);
             }
-            Some(result) => {
-                tracing::debug!("Raw response for idx {}: {:?}", idx, result);
-                match serde_json::from_value::<T>(result.clone()) {
-                    Ok(data) => Ok(data),
-                    Err(e) => {
-                        tracing::error!("Deserialization failed for idx {}: {:?}", idx, e);
-                        Err(anyhow::anyhow!(
-                            "Failed to deserialize response data: {:?}",
-                            e
-                        ))
-                    }
+            Some(result) => match serde_json::from_value::<T>(result.clone()) {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    error!(idx, ?e, "Deserialization failed");
+                    Err(anyhow::anyhow!(
+                        "Failed to deserialize response data: {:?}",
+                        e
+                    ))
                 }
-            }
+            },
         }
     }
 }

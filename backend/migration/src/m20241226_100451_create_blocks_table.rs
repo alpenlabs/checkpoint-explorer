@@ -2,7 +2,7 @@ use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
-// TODO: update integers to accomodate u64.
+
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -19,13 +19,13 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new(Blocks::Height)
-                            .big_integer()
+                            .big_unsigned()
                             .not_null()
                             .unique_key(), // Unique key for height
                     )
                     .col(
                         ColumnDef::new(Blocks::CheckpointIdx)
-                            .big_integer()
+                            .big_unsigned()
                             .not_null(), // Foreign key column
                     )
                     .foreign_key(

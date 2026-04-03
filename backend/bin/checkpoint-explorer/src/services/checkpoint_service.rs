@@ -2,8 +2,7 @@ use crate::services::block_service::CheckpointFetch;
 use database::connection::DatabaseWrapper;
 use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
 use fullnode_client::fetcher::StrataFetcher;
-use model::checkpoint::RpcCheckpointInfo;
-use model::pgu64::PgU64;
+use model::checkpoint::{RpcCheckpointConfStatus, RpcCheckpointInfo};
 use std::cmp::min;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
@@ -24,7 +23,7 @@ pub async fn start_checkpoint_fetcher(
         interval.tick().await;
         match fetch_checkpoints(fetcher.clone(), database.clone(), tx.clone()).await {
             Ok(_) => (),
-            Err(e) => tracing::error!("Error fetching checkpoints: {}", e),
+            Err(e) => error!(?e, "Failed to fetch checkpoints"),
         }
     }
 }
@@ -46,21 +45,20 @@ async fn fetch_checkpoints(
         warn!("Failed to fetch latest checkpoint index from fullnode or no checkpoint yet.");
         return Ok(());
     }
-    let fn_chkpt_i64 = PgU64(fullnode_last_checkpoint.unwrap()).to_i64();
+    let fn_chkpt = fullnode_last_checkpoint.unwrap();
     let starting_checkpoint = get_starting_checkpoint_idx(database.clone()).await?;
-    info!("latest checkpoint index in fullnode: {}, local checkpoint to start block indexing from: {}", PgU64::i64_to_u64(fn_chkpt_i64), PgU64::i64_to_u64(starting_checkpoint));
-    for idx in (starting_checkpoint)..=fn_chkpt_i64 {
+    info!(
+        fullnode_latest = fn_chkpt,
+        local_start = starting_checkpoint,
+        "Checkpoint sync range"
+    );
+    for idx in starting_checkpoint..=fn_chkpt {
         if !checkpoint_db.checkpoint_exists(idx).await {
-            info!(
-                "Checkpoint does not exist in db, fetching checkpoint with idx {}",
-                PgU64::i64_to_u64(idx)
-            );
-            let i = PgU64::from_i64(idx).0;
+            info!(idx, "Checkpoint not in db, fetching");
             if let Ok(checkpoint) = fetcher
-                .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", i)
+                .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
                 .await
             {
-                // info!("Inserting checkpoint with idx {}", idx);
                 checkpoint_db.insert_checkpoint(checkpoint.clone()).await;
             }
         }
@@ -71,31 +69,29 @@ async fn fetch_checkpoints(
 }
 
 /// It is a helper function that returns the starting checkpoint index to start fetching from
-/// It will return the minimum of the last checkpoint in the database and the checkpoint correcpoinding to
+/// It will return the minimum of the last checkpoint in the database and the checkpoint corresponding to
 /// last block in the database
-async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<i64> {
+async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u64> {
     let checkpoint_db = CheckpointService::new(&db.db);
     let block_db = BlockService::new(&db.db);
 
     let last_block = block_db.get_latest_block_index().await;
 
-    let local_last_checkpoint = checkpoint_db
-        .get_latest_checkpoint_index()
-        .await
-        .unwrap_or(-1);
-    // if we do not have a checkpoint in db start from 0
-    if local_last_checkpoint == -1 {
-        return Ok(i64::MIN);
-    }
+    let local_last_checkpoint = match checkpoint_db.get_latest_checkpoint_index().await {
+        Some(idx) => idx,
+        // no checkpoints in db yet — start from the beginning
+        None => return Ok(0),
+    };
+
     // we are calling it probable_* to consider some weirdest condition when
     // we have the block but no any earlier checkpoint (before where block corresponds)
-    let probable_starting_checkpoint: i64 = if let Some(block_height) = last_block {
+    let probable_starting_checkpoint: u64 = if let Some(block_height) = last_block {
         checkpoint_db
             .get_checkpoint_idx_by_block_height(block_height)
             .await?
-            .unwrap_or_default()
+            .unwrap_or(0)
     } else {
-        i64::MIN
+        0
     };
 
     Ok(min(probable_starting_checkpoint, local_last_checkpoint))
@@ -118,11 +114,18 @@ pub async fn start_checkpoint_status_updater_task(
         loop {
             interval.tick().await;
 
-            if let Err(e) =
-                update_checkpoints_status(fetcher_clone.clone(), database_clone.clone(), "pending")
-                    .await
+            if let Err(e) = update_checkpoints_status(
+                fetcher_clone.clone(),
+                database_clone.clone(),
+                RpcCheckpointConfStatus::Pending,
+            )
+            .await
             {
-                tracing::error!("Error fetching pending checkpoints: {}", e);
+                error!(
+                    status = "pending",
+                    ?e,
+                    "Failed to update checkpoint statuses"
+                );
             }
         }
     });
@@ -134,10 +137,18 @@ pub async fn start_checkpoint_status_updater_task(
         loop {
             interval.tick().await;
 
-            if let Err(e) =
-                update_checkpoints_status(fetcher.clone(), database.clone(), "confirmed").await
+            if let Err(e) = update_checkpoints_status(
+                fetcher.clone(),
+                database.clone(),
+                RpcCheckpointConfStatus::Confirmed,
+            )
+            .await
             {
-                tracing::error!("Error fetching confirmed checkpoints: {}", e);
+                error!(
+                    status = "confirmed",
+                    ?e,
+                    "Failed to update checkpoint statuses"
+                );
             }
         }
     });
@@ -158,28 +169,31 @@ pub async fn start_checkpoint_status_updater_task(
 async fn update_checkpoints_status(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    status: &str,
+    status: RpcCheckpointConfStatus,
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
 
-    let mut idx = -1;
-    if status == "pending" {
-        idx = match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
-            Some(i) => i,
-            None => {
-                info!("No more pending checkpoints locally.");
-                return Ok(());
+    let mut idx: u64 = match status {
+        RpcCheckpointConfStatus::Pending => {
+            match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
+                Some(i) => i,
+                None => {
+                    info!("No more pending checkpoints locally.");
+                    return Ok(());
+                }
             }
-        };
-    } else if status == "confirmed" {
-        idx = match checkpoint_db.get_earliest_confirmed_checkpoint_idx().await {
-            Some(i) => i,
-            None => {
-                info!("No more confirmed checkpoints locally.");
-                return Ok(());
+        }
+        RpcCheckpointConfStatus::Confirmed => {
+            match checkpoint_db.get_earliest_confirmed_checkpoint_idx().await {
+                Some(i) => i,
+                None => {
+                    info!("No more confirmed checkpoints locally.");
+                    return Ok(());
+                }
             }
-        };
-    }
+        }
+        RpcCheckpointConfStatus::Finalized => return Ok(()),
+    };
 
     loop {
         // This is the stopping condition for the loop. If the checkpoint is not found in the database,
@@ -189,49 +203,35 @@ async fn update_checkpoints_status(
             return Ok(());
         };
 
-        let i = PgU64::from_i64(idx).0;
-
         let Ok(checkpoint_from_rpc) = fetcher
-            .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", i)
+            .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
             .await
         else {
-            warn!(
-                "Checkpoint not found in fullnode for idx {}",
-                PgU64::i64_to_u64(idx)
-            );
+            warn!(idx, "Checkpoint not found in fullnode");
             return Ok(());
         };
 
-        let status = match checkpoint_from_rpc.confirmation_status {
-            Some(status) => status.to_string(),
+        let new_status = match checkpoint_from_rpc.confirmation_status {
+            Some(s) => s,
             None => {
-                warn!("Checkpoint status is None for idx {}", idx);
+                warn!(idx, "Checkpoint status is None");
                 return Ok(()); // Simply return and continue execution instead of erroring
             }
         };
 
         // if there is no change in status, return by doing nothing
-        if checkpoint_in_db
-            .confirmation_status
-            .map_or("-".to_string(), |s| s.to_string())
-            == status.to_string()
-        {
-            // if the status is unchanged then do nothing
+        if checkpoint_in_db.confirmation_status == Some(new_status) {
             return Ok(());
         }
 
-        info!(
-            "Updating checkpoint status: idx={}, status={}",
-            PgU64::i64_to_u64(idx),
-            status.clone()
-        );
+        info!(idx, %new_status, "Updating checkpoint status");
         // update the db with the new checkpoint record instead of tweaking the existing one
         // as there could be change in both status and txid
         checkpoint_db
             .update_checkpoint(idx, checkpoint_from_rpc)
             .await
             .map_err(|e| {
-                error!("Error updating checkpoint status: {:?}", e);
+                error!(?e, "Failed to update checkpoint status");
                 anyhow::anyhow!("Failed to update checkpoint status")
             })?;
 

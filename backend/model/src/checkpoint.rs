@@ -1,4 +1,3 @@
-use crate::pgu64::PgU64;
 use anyhow::Error;
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
@@ -9,6 +8,7 @@ use std::str::FromStr;
 /// Represents an L2 Block ID.
 pub type L2BlockId = String;
 pub type L1BlockId = String;
+pub type Txid = String;
 
 /// Represents the checkpoint information returned by the RPC.
 /// Name for this struct comes from the Strata RPC endpoint.
@@ -47,14 +47,18 @@ pub struct L2BlockCommitment {
     blkid: L2BlockId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
 #[serde(rename_all = "lowercase")]
+#[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum RpcCheckpointConfStatus {
     /// Pending to be posted on L1
+    #[sea_orm(string_value = "Pending")]
     Pending,
     /// Confirmed on L1
+    #[sea_orm(string_value = "Confirmed")]
     Confirmed,
     /// Finalized on L1
+    #[sea_orm(string_value = "Finalized")]
     Finalized,
 }
 
@@ -66,7 +70,7 @@ impl FromStr for RpcCheckpointConfStatus {
             "pending" => Ok(RpcCheckpointConfStatus::Pending),
             "confirmed" => Ok(RpcCheckpointConfStatus::Confirmed),
             "finalized" => Ok(RpcCheckpointConfStatus::Finalized),
-            _ => Err(Error::msg(format!("Invalid status: {}", s))),
+            _ => Err(Error::msg(format!("Invalid status: {s}"))),
         }
     }
 }
@@ -78,7 +82,7 @@ impl Display for RpcCheckpointConfStatus {
             RpcCheckpointConfStatus::Confirmed => "confirmed",
             RpcCheckpointConfStatus::Finalized => "finalized",
         };
-        write!(f, "{}", status_str)
+        write!(f, "{status_str}")
     }
 }
 
@@ -87,14 +91,14 @@ impl Display for RpcCheckpointConfStatus {
 )]
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
-    #[sea_orm(primary_key)]
-    pub idx: i64,
-    pub l1_start: i64,
-    pub l1_end: i64,
-    pub l2_start: i64,
-    pub l2_end: i64,
-    pub checkpoint_txid: String,
-    pub status: String,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub idx: u64,
+    pub l1_start: u64,
+    pub l1_end: u64,
+    pub l2_start: u64,
+    pub l2_end: u64,
+    pub checkpoint_txid: Option<Txid>,
+    pub status: RpcCheckpointConfStatus,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -103,21 +107,23 @@ pub enum Relation {}
 impl From<RpcCheckpointInfo> for ActiveModel {
     fn from(info: RpcCheckpointInfo) -> Self {
         Self {
-            idx: Set(PgU64(info.idx).to_i64()),
-            l1_start: Set(PgU64(info.l1_range.0.height).to_i64()),
-            l1_end: Set(PgU64(info.l1_range.1.height).to_i64()),
-            l2_start: Set(PgU64(info.l2_range.0.slot).to_i64()),
-            l2_end: Set(PgU64(info.l2_range.1.slot).to_i64()),
-            checkpoint_txid: Set(info
-                .l1_reference
-                .as_ref()
-                .map_or("-".to_string(), |c| c.txid.clone())), // Extracting `txid`
+            idx: Set(info.idx),
+            l1_start: Set(info.l1_range.0.height),
+            l1_end: Set(info.l1_range.1.height),
+            l2_start: Set(info.l2_range.0.slot),
+            l2_end: Set(info.l2_range.1.slot),
+            checkpoint_txid: Set(info.l1_reference.as_ref().map(|c| c.txid.clone())),
             status: Set(info
                 .confirmation_status
-                .as_ref()
-                .map_or("-".to_string(), |s| format!("{:?}", s))), // Convert enum to string
+                .unwrap_or(RpcCheckpointConfStatus::Pending)),
         }
     }
+}
+
+/// Minimal L1 reference for the explorer response — only the txid is stored in the DB.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExplorerL1Ref {
+    pub txid: Txid,
 }
 
 /// Represents the checkpoint information returned by the RPC to the frontend.
@@ -129,8 +135,8 @@ pub struct RpcCheckpointInfoCheckpointExp {
     pub l1_range: (u64, u64),
     /// The L2 height range that the checkpoint covers (start, end)
     pub l2_range: (u64, u64),
-    /// Info on txn where checkpoint is committed on chain
-    pub l1_reference: Option<RpcCheckpointL1Ref>,
+    /// Txid of the L1 transaction where the checkpoint was committed (None if not yet committed)
+    pub l1_reference: Option<ExplorerL1Ref>,
     /// Confirmation status of checkpoint
     pub confirmation_status: Option<RpcCheckpointConfStatus>,
 }
@@ -138,22 +144,11 @@ pub struct RpcCheckpointInfoCheckpointExp {
 impl From<Model> for RpcCheckpointInfoCheckpointExp {
     fn from(model: Model) -> Self {
         Self {
-            idx: PgU64::from_i64(model.idx).0,
-            l1_range: (
-                PgU64::from_i64(model.l1_start).0,
-                PgU64::from_i64(model.l1_end).0,
-            ),
-            l2_range: (
-                PgU64::from_i64(model.l2_start).0,
-                PgU64::from_i64(model.l2_end).0,
-            ),
-            l1_reference: Some(RpcCheckpointL1Ref {
-                block_height: 0,
-                block_id: "dummy".to_string(),
-                txid: model.checkpoint_txid.clone(),
-                wtxid: "dummy".to_string(),
-            }),
-            confirmation_status: model.status.parse().ok(), // Convert status string to `RpcCheckpointConfStatus`
+            idx: model.idx,
+            l1_range: (model.l1_start, model.l1_end),
+            l2_range: (model.l2_start, model.l2_end),
+            l1_reference: model.checkpoint_txid.map(|txid| ExplorerL1Ref { txid }),
+            confirmation_status: Some(model.status),
         }
     }
 }

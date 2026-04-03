@@ -1,4 +1,3 @@
-use crate::pgu64::PgU64;
 use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::{NotSet, Set};
 use serde::{Deserialize, Serialize};
@@ -7,10 +6,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "blocks")]
 pub struct Model {
-    #[sea_orm(primary_key)]
+    #[sea_orm(primary_key, auto_increment = false)]
     pub block_hash: String,
-    pub height: i64,
-    pub checkpoint_idx: i64,
+    pub height: u64,
+    pub checkpoint_idx: u64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -21,10 +20,9 @@ impl ActiveModelBehavior for ActiveModel {}
 /// Implements conversion from `RpcBlockHeader` to `ActiveModel` for the `blocks` table
 impl From<RpcBlockHeader> for ActiveModel {
     fn from(header: RpcBlockHeader) -> Self {
-        let b_id = PgU64::from_u64(header.block_idx).to_i64();
         Self {
             block_hash: Set(header.block_id),
-            height: Set(b_id),
+            height: Set(header.block_idx),
             checkpoint_idx: NotSet,
         }
     }

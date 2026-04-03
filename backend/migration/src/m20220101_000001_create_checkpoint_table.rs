@@ -18,34 +18,24 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(Checkpoints::Idx)
-                            .big_integer()
+                            .big_unsigned()
                             .not_null()
                             .primary_key(),
                     )
                     .col(
                         ColumnDef::new(Checkpoints::L1Start)
-                            .big_integer()
+                            .big_unsigned()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Checkpoints::L1End).big_integer().not_null())
+                    .col(ColumnDef::new(Checkpoints::L1End).big_unsigned().not_null())
                     .col(
                         ColumnDef::new(Checkpoints::L2Start)
-                            .big_integer()
+                            .big_unsigned()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Checkpoints::L2End).big_integer().not_null())
-                    .col(
-                        ColumnDef::new(Checkpoints::CheckpointTxid)
-                            .string()
-                            .not_null()
-                            .default("-"),
-                    )
-                    .col(
-                        ColumnDef::new(Checkpoints::Status)
-                            .string()
-                            .not_null()
-                            .default("-"),
-                    )
+                    .col(ColumnDef::new(Checkpoints::L2End).big_unsigned().not_null())
+                    .col(ColumnDef::new(Checkpoints::CheckpointTxid).string().null())
+                    .col(ColumnDef::new(Checkpoints::Status).string().not_null())
                     .to_owned(),
             )
             .await?;

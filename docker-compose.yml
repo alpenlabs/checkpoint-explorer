@@ -1,27 +1,21 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: checkpoint_explorer_postgres
+  mariadb:
+    image: mariadb:11
+    container_name: checkpoint_explorer_mariadb
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: checkpoint_explorer_db
+      MARIADB_USER: explorer
+      MARIADB_PASSWORD: password
+      MARIADB_DATABASE: checkpoint_explorer_db
+      MARIADB_ROOT_PASSWORD: rootpassword
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  migration:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: checkpoint_explorer_migration
-    depends_on:
-      - postgres
-    environment:
-      DATABASE_URL: postgres://postgres:password@postgres:5432/checkpoint_explorer_db
-    command: ["./migration"]
-    restart: "no"
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -29,14 +23,15 @@ services:
       dockerfile: Dockerfile
     container_name: checkpoint_explorer_backend
     environment:
-      APP_DATABASE_URL: postgres://postgres:password@postgres:5432/checkpoint_explorer_db
+      APP_DATABASE_URL: mysql://explorer:password@mariadb:3306/checkpoint_explorer_db
       STRATA_FULLNODE: "https://rpc.testnet-staging.stratabtc.org/"
       APP_FETCH_INTERVAL: 5
       RUST_LOG: "info,sqlx::query=warn"
     ports:
       - "3000:3000"
     depends_on:
-      - migration
+      mariadb:
+        condition: service_healthy
     command: ["./checkpoint-explorer"]
 
   frontend:
@@ -50,4 +45,4 @@ services:
       - "5173:5173"
 
 volumes:
-  postgres_data:
+  mariadb_data:
