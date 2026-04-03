@@ -17,12 +17,12 @@ pub struct Config {
     )]
     pub strata_fullnode: String,
 
-    /// The URL of the PostgreSQL database
+    /// The URL of the MariaDB database
     #[arg(
         long,
         env = "APP_DATABASE_URL",
-        default_value = "postgres://postgres:password@localhost:5432/checkpoint_explorer_db",
-        help = "PostgreSQL database URL"
+        default_value = "mysql://root:password@localhost:3306/checkpoint_explorer_db",
+        help = "MariaDB database URL"
     )]
     pub database_url: String,
 
