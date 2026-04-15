@@ -8,12 +8,12 @@ use database::connection::DatabaseWrapper;
 use dotenvy::dotenv;
 use fullnode_client::fetcher::StrataFetcher;
 use migration::{Migrator, MigratorTrait};
+use model::checkpoint::L2BlockFetchTarget;
 use reqwest::Method;
 use services::{
     block_service::run_block_fetcher,
     checkpoint_service::{start_checkpoint_fetcher, start_checkpoint_status_updater_task},
 };
-use model::checkpoint::L2BlockFetchTarget;
 use std::sync::Arc;
 use tokio::sync::watch;
 use tracing::{error, info};

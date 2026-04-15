@@ -1,7 +1,7 @@
 use database::connection::DatabaseWrapper;
 use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
 use fullnode_client::fetcher::StrataFetcher;
-use model::checkpoint::{L2BlockFetchTarget, RpcCheckpointConfStatus, RpcCheckpointInfo};
+use model::checkpoint::{L2BlockFetchTarget, RpcCheckpointConfStatus};
 use std::cmp::min;
 use std::sync::Arc;
 use tokio::sync::watch::Sender;
@@ -49,10 +49,7 @@ async fn fetch_checkpoints(
     for idx in starting_checkpoint..=fn_chkpt {
         if !checkpoint_db.checkpoint_exists(idx).await {
             info!(idx, "Checkpoint not in db, fetching");
-            if let Ok(checkpoint) = fetcher
-                .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
-                .await
-            {
+            if let Ok(checkpoint) = fetcher.fetch_checkpoint_info(idx).await {
                 checkpoint_db.insert_checkpoint(checkpoint).await;
             }
         }
@@ -207,10 +204,7 @@ async fn update_checkpoints_status(
             return Ok(());
         };
 
-        let Ok(checkpoint_from_rpc) = fetcher
-            .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
-            .await
-        else {
+        let Ok(checkpoint_from_rpc) = fetcher.fetch_checkpoint_info(idx).await else {
             warn!(idx, "Checkpoint not found in fullnode");
             return Ok(());
         };

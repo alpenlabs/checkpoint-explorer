@@ -3,7 +3,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use model::block::RpcBlockHeader;
-use model::checkpoint::RpcOLChainStatus;
+use model::checkpoint::{RpcCheckpointInfo, RpcOLChainStatus};
 use tracing::error;
 
 /// `StrataFetcher` struct for fetching checkpoint and block data
@@ -20,17 +20,14 @@ impl StrataFetcher {
         Self { client }
     }
 
-    /// Fetches detailed information for a given index (checkpoint or block).
-    pub async fn fetch_data<T>(&self, method: &str, idx: u64) -> Result<T>
-    where
-        T: serde::de::DeserializeOwned,
-    {
+    /// Fetches checkpoint info for a given index via strata_getCheckpointInfo.
+    pub async fn fetch_checkpoint_info(&self, idx: u64) -> Result<RpcCheckpointInfo> {
         self.client
-            .request(method, rpc_params![idx])
+            .request("strata_getCheckpointInfo", rpc_params![idx])
             .await
             .map_err(|e| {
-                error!(method, idx, ?e, "RPC call failed");
-                anyhow::anyhow!("RPC call failed: {:?}", e)
+                error!(idx, ?e, "strata_getCheckpointInfo failed");
+                anyhow::anyhow!("strata_getCheckpointInfo failed: {:?}", e)
             })
     }
 
