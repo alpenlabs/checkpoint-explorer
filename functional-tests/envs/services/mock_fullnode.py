@@ -40,12 +40,12 @@ class _MockServer(HTTPServer):
         self._bpc = blocks_per_checkpoint
 
     def dispatch(self, method: str, params: list):
-        if method == "strata_getLatestCheckpointIndex":
-            return self._n - 1
+        if method == "strata_getChainStatus":
+            return {"confirmed": {"epoch": self._n - 1}}
         if method == "strata_getCheckpointInfo":
             return self._checkpoint_info(int(params[0]))
-        if method == "strata_getHeadersAtIdx":
-            return self._headers_at_idx(int(params[0]))
+        if method == "strata_getHeadersInRange":
+            return self._headers_in_range(int(params[0]), int(params[1]))
         return None
 
     def _checkpoint_info(self, idx: int):
@@ -57,13 +57,19 @@ class _MockServer(HTTPServer):
         l1_start = idx * 10
         l1_end = l1_start + 9
 
+        l1_ref = {
+            "l1_block": {"height": l1_end, "blkid": _hex(l1_end, namespace=1)},
+            "txid": _hex(idx, namespace=3),
+            "wtxid": _hex(idx, namespace=4),
+        }
+
         # Older checkpoints are finalized; newest two are confirmed/pending
         if idx < self._n - 2:
-            status = "finalized"
+            conf_status = {"status": "finalized", "l1_reference": l1_ref}
         elif idx == self._n - 2:
-            status = "confirmed"
+            conf_status = {"status": "confirmed", "l1_reference": l1_ref}
         else:
-            status = "pending"
+            conf_status = {"status": "pending"}
 
         return {
             "idx": idx,
@@ -75,28 +81,27 @@ class _MockServer(HTTPServer):
                 {"slot": l2_start, "blkid": _hex(l2_start, namespace=2)},
                 {"slot": l2_end, "blkid": _hex(l2_end, namespace=2)},
             ],
-            "l1_reference": {
-                "block_height": l1_end,
-                "block_id": _hex(l1_end, namespace=1),
-                "txid": _hex(idx, namespace=3),
-                "wtxid": _hex(idx, namespace=4),
-            },
-            "confirmation_status": status,
+            "confirmation_status": conf_status,
         }
 
-    def _headers_at_idx(self, height: int):
-        prev = _hex(height - 1, namespace=2) if height > 0 else "0" * 64
-        return [
-            {
-                "block_idx": height,
+    def _headers_in_range(self, start: int, end: int):
+        headers = []
+        for height in range(start, end + 1):
+            epoch = height // self._bpc
+            prev = _hex(height - 1, namespace=2) if height > 0 else "0" * 64
+            is_terminal = (height % self._bpc) == (self._bpc - 1)
+            headers.append({
+                "slot": height,
+                "epoch": epoch,
+                "blkid": _hex(height, namespace=2),
                 "timestamp": 1_700_000_000 + height * 12,
-                "block_id": _hex(height, namespace=2),
-                "prev_block": prev,
-                "l1_segment_hash": _hex(height, namespace=5),
-                "exec_segment_hash": _hex(height, namespace=6),
+                "parent_blkid": prev,
                 "state_root": _hex(height, namespace=7),
-            }
-        ]
+                "body_root": _hex(height, namespace=5),
+                "logs_root": _hex(height, namespace=6),
+                "is_terminal": is_terminal,
+            })
+        return headers
 
 
 class MockFullnodeService:

@@ -1,5 +1,6 @@
+use crate::checkpoint::{HexBytes32, L2BlockId};
 use sea_orm::entity::prelude::*;
-use sea_orm::ActiveValue::{NotSet, Set};
+use sea_orm::ActiveValue::Set;
 use serde::{Deserialize, Serialize};
 
 /// Represents the Block model for the database
@@ -21,34 +22,23 @@ impl ActiveModelBehavior for ActiveModel {}
 impl From<RpcBlockHeader> for ActiveModel {
     fn from(header: RpcBlockHeader) -> Self {
         Self {
-            block_hash: Set(header.block_id),
-            height: Set(header.block_idx),
-            checkpoint_idx: NotSet,
+            block_hash: Set(header.blkid),
+            height: Set(header.slot),
+            checkpoint_idx: Set(header.epoch),
         }
     }
 }
 
-/// Represents a block header as returned by Strata fullnode
+/// Represents a block header as returned by strata_getHeadersInRange
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcBlockHeader {
-    /// The index of the block representing height.
-    pub block_idx: u64,
-
-    /// The timestamp of when the block was created in UNIX epoch format.
+    pub slot: u64,
+    pub epoch: u64,
+    pub blkid: L2BlockId,
     pub timestamp: u64,
-
-    /// hash of the block's contents.
-    pub block_id: String,
-
-    /// previous block
-    pub prev_block: String,
-
-    /// L1 segment hash
-    pub l1_segment_hash: String,
-
-    /// Hash of the execution segment
-    pub exec_segment_hash: String,
-
-    /// The root hash of the state tree
-    pub state_root: String,
+    pub parent_blkid: L2BlockId,
+    pub state_root: HexBytes32,
+    pub body_root: HexBytes32,
+    pub logs_root: HexBytes32,
+    pub is_terminal: bool,
 }

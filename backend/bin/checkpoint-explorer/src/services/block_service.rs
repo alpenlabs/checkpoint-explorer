@@ -1,70 +1,56 @@
 use database::connection::DatabaseWrapper;
-use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
+use database::services::block_service::BlockService;
 use fullnode_client::fetcher::StrataFetcher;
-use model::block::RpcBlockHeader;
+use model::checkpoint::L2BlockFetchTarget;
 use std::sync::Arc;
-use tokio::sync::mpsc::Receiver;
-use tracing::{debug, info};
+use tokio::sync::watch::Receiver;
+use tracing::{error, info};
 
-/// Event sent to block fetcher to request fetching of blocks for the checkpoint
-#[derive(Debug, Clone)]
-pub struct CheckpointFetch {
-    pub idx: u64,
-}
-impl CheckpointFetch {
-    pub fn new(idx: u64) -> Self {
-        Self { idx }
-    }
-}
+const MAX_HEADERS_RANGE: u64 = 5000;
+
 pub async fn run_block_fetcher(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    mut rx: Receiver<CheckpointFetch>,
+    mut rx: Receiver<L2BlockFetchTarget>,
 ) {
     info!("Starting block fetcher...");
-    while let Some(CheckpointFetch { idx }) = rx.recv().await {
-        debug!(idx, "Received checkpoint");
-        fetch_blocks_in_checkpoint(fetcher.clone(), database.clone(), idx).await;
+    loop {
+        if rx.changed().await.is_err() {
+            break;
+        }
+        let target = *rx.borrow_and_update();
+        fetch_blocks(fetcher.clone(), database.clone(), target).await;
     }
 }
 
-async fn fetch_blocks_in_checkpoint(
-    fetcher: Arc<StrataFetcher>,
-    database: Arc<DatabaseWrapper>,
-    checkpoint_idx: u64,
-) {
-    let checkpoint_db = CheckpointService::new(&database.db);
+async fn fetch_blocks(fetcher: Arc<StrataFetcher>, database: Arc<DatabaseWrapper>, target: u64) {
     let block_db = BlockService::new(&database.db);
-    let checkpoint = checkpoint_db.get_checkpoint_by_idx(checkpoint_idx).await;
-    if let Some(c) = checkpoint {
-        let mut start = c.l2_range.0;
-        let end = c.l2_range.1;
+    let start = block_db
+        .get_latest_block_index()
+        .await
+        .map(|h| h + 1)
+        .unwrap_or(0);
 
-        // we will reach this point only when we are sure that we must fetch from particular
-        // checkpoint. So having the highest among the blocks must give us the shortcut
-        // to determine the most optimal starting point.
-        let last_block = block_db.get_latest_block_index().await;
-        if let Some(last_block_height) = last_block {
-            // start from the next block
-            if last_block_height >= start {
-                start = last_block_height + 1;
-            }
-        }
-        if start > end {
-            info!(checkpoint_idx, "No blocks to fetch");
-            return;
-        }
-        info!(start, end, checkpoint_idx, "Fetching blocks");
-        for block_height in start..=end {
-            if let Ok(block_headers) = fetcher
-                .fetch_data::<Vec<RpcBlockHeader>>("strata_getHeadersAtIdx", block_height)
-                .await
-            {
-                for block_header in block_headers {
-                    block_db
-                        .insert_block(block_header.clone(), checkpoint_idx)
-                        .await;
+    if start > target {
+        info!("No blocks to fetch");
+        return;
+    }
+
+    let mut cursor = start;
+    info!(cursor, target, "Fetching blocks");
+    while cursor <= target {
+        let chunk_end = (cursor + MAX_HEADERS_RANGE - 1).min(target);
+        match fetcher.fetch_headers_in_range(cursor, chunk_end).await {
+            Ok(headers) => {
+                for header in headers {
+                    let checkpoint_idx = header.epoch;
+                    block_db.insert_block(header, checkpoint_idx).await;
                 }
+                cursor = chunk_end + 1;
+            }
+            Err(e) => {
+                error!(?e, cursor, chunk_end, "Failed to fetch block headers");
+                return;
             }
         }
     }

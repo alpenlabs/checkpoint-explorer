@@ -13,9 +13,10 @@ use services::{
     block_service::run_block_fetcher,
     checkpoint_service::{start_checkpoint_fetcher, start_checkpoint_status_updater_task},
 };
+use model::checkpoint::L2BlockFetchTarget;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tracing::info;
+use tokio::sync::watch;
+use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 use utils::config::Config;
 
@@ -40,27 +41,28 @@ async fn main() {
         .await
         .expect("Failed to run database migrations");
 
-    // Channels for communication between checkpoint fetcher and block fetcher
-    let (tx, rx) = mpsc::channel(100);
+    // Signals the block fetcher how far to fetch: carries the L2 end slot of
+    // the latest checkpoint processed by the checkpoint fetcher.
+    let (tx, rx) = watch::channel::<L2BlockFetchTarget>(0);
 
     // Start block fetcher task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let block_fetcher_handle = tokio::spawn(async move {
         run_block_fetcher(fetcher_clone, database_clone, rx).await;
     });
 
     // Start checkpoint fetcher task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let checkpoint_fetcher_handle = tokio::spawn(async move {
         start_checkpoint_fetcher(fetcher_clone, database_clone, tx, config.fetch_interval).await;
     });
 
     // Start checkpoint status updater task
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let status_updater_handle = tokio::spawn(async move {
         start_checkpoint_status_updater_task(
             fetcher_clone,
             database_clone,
@@ -90,8 +92,14 @@ async fn main() {
     // Start the server
     let addr = format!("0.0.0.0:{}", config.server_port).parse().unwrap();
     info!(%addr, "Server started");
-    axum::Server::bind(&addr)
-        .serve(app.layer(cors).into_make_service())
-        .await
-        .unwrap();
+    let server = axum::Server::bind(&addr).serve(app.layer(cors).into_make_service());
+
+    // TODO: ideally use a service framework for lifecycle management in a follow up pr
+    tokio::select! {
+        res = block_fetcher_handle => { error!(?res, "block fetcher exited unexpectedly"); }
+        res = checkpoint_fetcher_handle => { error!(?res, "checkpoint fetcher exited unexpectedly"); }
+        res = status_updater_handle => { error!(?res, "status updater exited unexpectedly"); }
+        res = server => { error!(?res, "server exited unexpectedly"); }
+    }
+    std::process::exit(1);
 }

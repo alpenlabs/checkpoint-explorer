@@ -32,3 +32,4 @@ hex = "0.4"
 sea-orm-migration = "0.9"
 config = "0.13"
 dotenvy = "0.15.7"
+jsonrpsee = { version = "0.26.0", features = ["http-client"] }
