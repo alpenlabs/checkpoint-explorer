@@ -10,7 +10,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub block_hash: String,
     pub height: u64,
-    pub checkpoint_idx: u64,
+    pub checkpoint_idx: u32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -33,7 +33,7 @@ impl From<RpcBlockHeader> for ActiveModel {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcBlockHeader {
     pub slot: u64,
-    pub epoch: u64,
+    pub epoch: u32,
     pub blkid: L2BlockId,
     pub timestamp: u64,
     pub parent_blkid: L2BlockId,

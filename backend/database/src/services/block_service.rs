@@ -12,7 +12,7 @@ impl<'a> BlockService<'a> {
         Self { db }
     }
 
-    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u64) {
+    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u32) {
         // Use `From` to convert `RpcBlockHeader` into an `ActiveModel`
         let mut active_model: BlockActiveModel = rpc_block_header.into();
 

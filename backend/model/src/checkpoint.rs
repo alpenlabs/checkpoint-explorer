@@ -20,7 +20,7 @@ pub type L2BlockFetchTarget = u64;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfo {
     /// The index of the checkpoint
-    pub idx: u64,
+    pub idx: u32,
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (L1BlockCommitment, L1BlockCommitment),
     /// The L2 height range that the checkpoint covers (start, end)
@@ -63,7 +63,7 @@ pub struct RpcOLChainStatus {
 
 #[derive(Debug, Deserialize)]
 pub struct EpochCommitment {
-    pub epoch: u64,
+    pub epoch: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
@@ -111,7 +111,7 @@ impl Display for RpcCheckpointConfStatus {
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub idx: u64,
+    pub idx: u32,
     pub l1_start: u64,
     pub l1_end: u64,
     pub l2_start: u64,
@@ -168,7 +168,7 @@ pub struct ExplorerL1Ref {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfoCheckpointExp {
     /// The index of the checkpoint
-    pub idx: u64,
+    pub idx: u32,
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (u64, u64),
     /// The L2 height range that the checkpoint covers (start, end)

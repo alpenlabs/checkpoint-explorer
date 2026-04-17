@@ -21,7 +21,7 @@ impl StrataFetcher {
     }
 
     /// Fetches checkpoint info for a given index via strata_getCheckpointInfo.
-    pub async fn fetch_checkpoint_info(&self, idx: u64) -> Result<RpcCheckpointInfo> {
+    pub async fn fetch_checkpoint_info(&self, idx: u32) -> Result<RpcCheckpointInfo> {
         self.client
             .request("strata_getCheckpointInfo", rpc_params![idx])
             .await

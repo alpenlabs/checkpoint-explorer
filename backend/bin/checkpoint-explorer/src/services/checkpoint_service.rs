@@ -66,7 +66,7 @@ async fn fetch_checkpoints(
 /// It is a helper function that returns the starting checkpoint index to start fetching from
 /// It will return the minimum of the last checkpoint in the database and the checkpoint corresponding to
 /// last block in the database
-async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u64> {
+async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u32> {
     let checkpoint_db = CheckpointService::new(&db.db);
     let block_db = BlockService::new(&db.db);
 
@@ -80,7 +80,7 @@ async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result
 
     // we are calling it probable_* to consider some weirdest condition when
     // we have the block but no any earlier checkpoint (before where block corresponds)
-    let probable_starting_checkpoint: u64 = if let Some(block_height) = last_block {
+    let probable_starting_checkpoint: u32 = if let Some(block_height) = last_block {
         checkpoint_db
             .get_checkpoint_idx_by_block_height(block_height)
             .await?
@@ -174,7 +174,7 @@ async fn update_checkpoints_status(
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
 
-    let mut idx: u64 = match status {
+    let mut idx: u32 = match status {
         RpcCheckpointConfStatus::Pending => {
             match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
                 Some(i) => i,
