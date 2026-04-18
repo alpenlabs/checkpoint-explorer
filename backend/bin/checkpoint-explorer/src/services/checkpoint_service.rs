@@ -1,11 +1,10 @@
-use crate::services::block_service::CheckpointFetch;
 use database::connection::DatabaseWrapper;
 use database::services::{block_service::BlockService, checkpoint_service::CheckpointService};
 use fullnode_client::fetcher::StrataFetcher;
-use model::checkpoint::{RpcCheckpointConfStatus, RpcCheckpointInfo};
+use model::checkpoint::{L2BlockFetchTarget, RpcCheckpointConfStatus};
 use std::cmp::min;
 use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::watch::Sender;
 use tracing::{error, info, warn};
 
 /// This function fetches the checkpoints from the fullnode and inserts them into the database
@@ -13,7 +12,7 @@ use tracing::{error, info, warn};
 pub async fn start_checkpoint_fetcher(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    tx: Sender<CheckpointFetch>,
+    tx: Sender<L2BlockFetchTarget>,
     fetch_interval: u64,
 ) {
     info!("Starting checkpoint fetcher...");
@@ -33,19 +32,14 @@ pub async fn start_checkpoint_fetcher(
 async fn fetch_checkpoints(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,
-    tx: Sender<CheckpointFetch>,
+    tx: Sender<L2BlockFetchTarget>,
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
     info!("Fetching checkpoints from fullnode...");
-    let fullnode_last_checkpoint = fetcher
-        .get_latest_index("strata_getLatestCheckpointIndex")
-        .await?;
-    // handle None case
-    if fullnode_last_checkpoint.is_none() {
-        warn!("Failed to fetch latest checkpoint index from fullnode or no checkpoint yet.");
-        return Ok(());
-    }
-    let fn_chkpt = fullnode_last_checkpoint.unwrap();
+
+    let chain_status = fetcher.get_chain_status().await?;
+    let fn_chkpt = chain_status.confirmed.epoch;
+
     let starting_checkpoint = get_starting_checkpoint_idx(database.clone()).await?;
     info!(
         fullnode_latest = fn_chkpt,
@@ -55,23 +49,24 @@ async fn fetch_checkpoints(
     for idx in starting_checkpoint..=fn_chkpt {
         if !checkpoint_db.checkpoint_exists(idx).await {
             info!(idx, "Checkpoint not in db, fetching");
-            if let Ok(checkpoint) = fetcher
-                .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
-                .await
-            {
-                checkpoint_db.insert_checkpoint(checkpoint.clone()).await;
+            if let Ok(checkpoint) = fetcher.fetch_checkpoint_info(idx).await {
+                checkpoint_db.insert_checkpoint(checkpoint).await;
             }
         }
-        let range = CheckpointFetch::new(idx);
-        tx.send(range).await?;
     }
+
+    // notify block fetcher with the l2_end of the latest confirmed checkpoint
+    if let Some(latest) = checkpoint_db.get_checkpoint_by_idx(fn_chkpt).await {
+        let _ = tx.send(latest.l2_range.1);
+    }
+
     Ok(())
 }
 
 /// It is a helper function that returns the starting checkpoint index to start fetching from
 /// It will return the minimum of the last checkpoint in the database and the checkpoint corresponding to
 /// last block in the database
-async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u64> {
+async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result<u32> {
     let checkpoint_db = CheckpointService::new(&db.db);
     let block_db = BlockService::new(&db.db);
 
@@ -85,7 +80,7 @@ async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result
 
     // we are calling it probable_* to consider some weirdest condition when
     // we have the block but no any earlier checkpoint (before where block corresponds)
-    let probable_starting_checkpoint: u64 = if let Some(block_height) = last_block {
+    let probable_starting_checkpoint: u32 = if let Some(block_height) = last_block {
         checkpoint_db
             .get_checkpoint_idx_by_block_height(block_height)
             .await?
@@ -108,7 +103,7 @@ pub async fn start_checkpoint_status_updater_task(
     // Spawn the "pending" checkpoint updater loop
     let fetcher_clone = fetcher.clone();
     let database_clone = database.clone();
-    tokio::spawn(async move {
+    let pending_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(update_interval));
 
         loop {
@@ -131,7 +126,7 @@ pub async fn start_checkpoint_status_updater_task(
     });
 
     // Spawn the "confirmed" checkpoint updater loop
-    tokio::spawn(async move {
+    let confirmed_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(update_interval));
 
         loop {
@@ -152,6 +147,12 @@ pub async fn start_checkpoint_status_updater_task(
             }
         }
     });
+
+    // TODO: ideally use a service framework for lifecycle management in a follow up pr
+    tokio::select! {
+        res = pending_handle => { error!(?res, "pending status updater exited unexpectedly"); }
+        res = confirmed_handle => { error!(?res, "confirmed status updater exited unexpectedly"); }
+    }
 }
 
 /// This function continuously updates the status of the checkpoints which are yet to be finalized.
@@ -173,7 +174,7 @@ async fn update_checkpoints_status(
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
 
-    let mut idx: u64 = match status {
+    let mut idx: u32 = match status {
         RpcCheckpointConfStatus::Pending => {
             match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
                 Some(i) => i,
@@ -203,21 +204,12 @@ async fn update_checkpoints_status(
             return Ok(());
         };
 
-        let Ok(checkpoint_from_rpc) = fetcher
-            .fetch_data::<RpcCheckpointInfo>("strata_getCheckpointInfo", idx)
-            .await
-        else {
+        let Ok(checkpoint_from_rpc) = fetcher.fetch_checkpoint_info(idx).await else {
             warn!(idx, "Checkpoint not found in fullnode");
             return Ok(());
         };
 
-        let new_status = match checkpoint_from_rpc.confirmation_status {
-            Some(s) => s,
-            None => {
-                warn!(idx, "Checkpoint status is None");
-                return Ok(()); // Simply return and continue execution instead of erroring
-            }
-        };
+        let new_status = checkpoint_from_rpc.status();
 
         // if there is no change in status, return by doing nothing
         if checkpoint_in_db.confirmation_status == Some(new_status) {

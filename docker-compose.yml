@@ -24,7 +24,7 @@ services:
     container_name: checkpoint_explorer_backend
     environment:
       APP_DATABASE_URL: mysql://explorer:password@mariadb:3306/checkpoint_explorer_db
-      STRATA_FULLNODE: "https://rpc.testnet-staging.stratabtc.org/"
+      STRATA_FULLNODE: "http://host.docker.internal:8432"
       APP_FETCH_INTERVAL: 5
       RUST_LOG: "info,sqlx::query=warn"
     ports:

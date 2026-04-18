@@ -9,21 +9,38 @@ use std::str::FromStr;
 pub type L2BlockId = String;
 pub type L1BlockId = String;
 pub type Txid = String;
+pub type HexBytes32 = String;
+
+/// The L2 slot number up to which the block fetcher should fetch blocks.
+/// Sent over the watch channel from the checkpoint fetcher to the block fetcher.
+pub type L2BlockFetchTarget = u64;
 
 /// Represents the checkpoint information returned by the RPC.
 /// Name for this struct comes from the Strata RPC endpoint.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfo {
     /// The index of the checkpoint
-    pub idx: u64,
+    pub idx: u32,
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (L1BlockCommitment, L1BlockCommitment),
     /// The L2 height range that the checkpoint covers (start, end)
     pub l2_range: (L2BlockCommitment, L2BlockCommitment),
-    /// Info on txn where checkpoint is committed on chain
-    pub l1_reference: Option<RpcCheckpointL1Ref>,
-    /// Confirmation status of checkpoint
-    pub confirmation_status: Option<RpcCheckpointConfStatus>,
+    confirmation_status: ConfStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RpcCheckpointL1Ref {
+    pub l1_block: L1BlockCommitment,
+    pub txid: Txid,
+    pub wtxid: Txid,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum ConfStatus {
+    Pending,
+    Confirmed { l1_reference: RpcCheckpointL1Ref },
+    Finalized { l1_reference: RpcCheckpointL1Ref },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,18 +50,20 @@ pub struct L1BlockCommitment {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Buf32(pub [u8; 32]);
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RpcCheckpointL1Ref {
-    pub block_height: u64,
-    pub block_id: String,
-    pub txid: String,
-    pub wtxid: String,
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct L2BlockCommitment {
-    slot: u64,
-    blkid: L2BlockId,
+    pub slot: u64,
+    pub blkid: L2BlockId,
+}
+
+/// Wire type for strata_getChainStatus (only fields we use).
+#[derive(Debug, Deserialize)]
+pub struct RpcOLChainStatus {
+    pub confirmed: EpochCommitment,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EpochCommitment {
+    pub epoch: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
@@ -92,7 +111,7 @@ impl Display for RpcCheckpointConfStatus {
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub idx: u64,
+    pub idx: u32,
     pub l1_start: u64,
     pub l1_end: u64,
     pub l2_start: u64,
@@ -104,18 +123,37 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {}
 
+impl RpcCheckpointInfo {
+    pub fn status(&self) -> RpcCheckpointConfStatus {
+        match &self.confirmation_status {
+            ConfStatus::Pending => RpcCheckpointConfStatus::Pending,
+            ConfStatus::Confirmed { .. } => RpcCheckpointConfStatus::Confirmed,
+            ConfStatus::Finalized { .. } => RpcCheckpointConfStatus::Finalized,
+        }
+    }
+}
+
 impl From<RpcCheckpointInfo> for ActiveModel {
     fn from(info: RpcCheckpointInfo) -> Self {
+        let (status, txid) = match &info.confirmation_status {
+            ConfStatus::Pending => (RpcCheckpointConfStatus::Pending, None),
+            ConfStatus::Confirmed { l1_reference } => (
+                RpcCheckpointConfStatus::Confirmed,
+                Some(l1_reference.txid.clone()),
+            ),
+            ConfStatus::Finalized { l1_reference } => (
+                RpcCheckpointConfStatus::Finalized,
+                Some(l1_reference.txid.clone()),
+            ),
+        };
         Self {
             idx: Set(info.idx),
             l1_start: Set(info.l1_range.0.height),
             l1_end: Set(info.l1_range.1.height),
             l2_start: Set(info.l2_range.0.slot),
             l2_end: Set(info.l2_range.1.slot),
-            checkpoint_txid: Set(info.l1_reference.as_ref().map(|c| c.txid.clone())),
-            status: Set(info
-                .confirmation_status
-                .unwrap_or(RpcCheckpointConfStatus::Pending)),
+            checkpoint_txid: Set(txid),
+            status: Set(status),
         }
     }
 }
@@ -130,7 +168,7 @@ pub struct ExplorerL1Ref {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfoCheckpointExp {
     /// The index of the checkpoint
-    pub idx: u64,
+    pub idx: u32,
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (u64, u64),
     /// The L2 height range that the checkpoint covers (start, end)

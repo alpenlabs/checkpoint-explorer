@@ -21,7 +21,7 @@ impl<'a> CheckpointService<'a> {
         Self { db }
     }
 
-    pub async fn checkpoint_exists(&self, idx: u64) -> bool {
+    pub async fn checkpoint_exists(&self, idx: u32) -> bool {
         Checkpoint::find()
             .filter(model::checkpoint::Column::Idx.eq(idx))
             .one(self.db)
@@ -32,7 +32,7 @@ impl<'a> CheckpointService<'a> {
 
     /// Insert a new checkpoint into the database
     pub async fn insert_checkpoint(&self, checkpoint: RpcCheckpointInfo) {
-        let idx: u64 = checkpoint.idx;
+        let idx: u32 = checkpoint.idx;
 
         // for the first checkpoint (idx=0), no need to check the previous checkpoint
         if let Some(previous_idx) = idx.checked_sub(1) {
@@ -57,7 +57,7 @@ impl<'a> CheckpointService<'a> {
     }
 
     /// Fetch a checkpoint by its index
-    pub async fn get_checkpoint_by_idx(&self, idx: u64) -> Option<RpcCheckpointInfoCheckpointExp> {
+    pub async fn get_checkpoint_by_idx(&self, idx: u32) -> Option<RpcCheckpointInfoCheckpointExp> {
         match Checkpoint::find()
             .filter(model::checkpoint::Column::Idx.eq(idx))
             .one(self.db)
@@ -76,7 +76,7 @@ impl<'a> CheckpointService<'a> {
     pub async fn get_checkpoint_idx_by_block_hash(
         &self,
         block_hash: &str,
-    ) -> Result<Option<u64>, DbErr> {
+    ) -> Result<Option<u32>, DbErr> {
         match Block::find()
             .filter(model::block::Column::BlockHash.eq(block_hash))
             .one(self.db)
@@ -101,7 +101,7 @@ impl<'a> CheckpointService<'a> {
     pub async fn get_checkpoint_idx_by_block_height(
         &self,
         block_height: u64,
-    ) -> Result<Option<u64>, DbErr> {
+    ) -> Result<Option<u32>, DbErr> {
         debug!(block_height, "Searching for block");
 
         match Block::find()
@@ -175,13 +175,13 @@ impl<'a> CheckpointService<'a> {
     }
 
     /// Get the latest checkpoint index stored in the database
-    pub async fn get_latest_checkpoint_index(&self) -> Option<u64> {
+    pub async fn get_latest_checkpoint_index(&self) -> Option<u32> {
         use sea_orm::entity::prelude::*;
 
         match Checkpoint::find()
             .select_only()
             .column_as(model::checkpoint::Column::Idx.max(), "max_idx")
-            .into_tuple::<Option<u64>>()
+            .into_tuple::<Option<u32>>()
             .one(self.db)
             .await
         {
@@ -195,7 +195,7 @@ impl<'a> CheckpointService<'a> {
     }
 
     /// Get the earliest checkpoint index whose status is either `Pending` or `Confirmed`
-    pub async fn get_earliest_unfinalized_checkpoint_idx(&self) -> Option<u64> {
+    pub async fn get_earliest_unfinalized_checkpoint_idx(&self) -> Option<u32> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -213,7 +213,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the earliest checkpoint index whose status is `Pending`
-    pub async fn get_earliest_pending_checkpoint_idx(&self) -> Option<u64> {
+    pub async fn get_earliest_pending_checkpoint_idx(&self) -> Option<u32> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -231,7 +231,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the earliest checkpoint index whose status is `Confirmed`
-    pub async fn get_earliest_confirmed_checkpoint_idx(&self) -> Option<u64> {
+    pub async fn get_earliest_confirmed_checkpoint_idx(&self) -> Option<u32> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -249,7 +249,7 @@ impl<'a> CheckpointService<'a> {
         }
     }
     /// Get the last checkpoint index whose status is `Finalized`
-    pub async fn get_last_finalized_checkpoint_idx(&self) -> Option<u64> {
+    pub async fn get_last_finalized_checkpoint_idx(&self) -> Option<u32> {
         // add the condition to check no checkpoint at all
         self.get_latest_checkpoint_index().await?;
         match Checkpoint::find()
@@ -270,7 +270,7 @@ impl<'a> CheckpointService<'a> {
     /// Update the status of a checkpoint
     pub async fn update_checkpoint(
         &self,
-        checkpoint_idx: u64,
+        checkpoint_idx: u32,
         updated_checkpoint: RpcCheckpointInfo,
     ) -> Result<(), DbErr> {
         match Checkpoint::find()

@@ -1,5 +1,5 @@
 use model::block::{ActiveModel as BlockActiveModel, Entity as Block, RpcBlockHeader};
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
+use sea_orm::{ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QuerySelect, Set};
 use tracing::{debug, error};
 
 /// Wrapper around the database connection
@@ -12,21 +12,17 @@ impl<'a> BlockService<'a> {
         Self { db }
     }
 
-    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u64) {
+    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u32) {
         // Use `From` to convert `RpcBlockHeader` into an `ActiveModel`
         let mut active_model: BlockActiveModel = rpc_block_header.into();
 
         let height = active_model.height.clone().unwrap();
         let block_id = active_model.block_hash.clone().unwrap();
 
-        // If block already exists locally do nothing
-        if self.block_exists(height).await {
-            debug!(height, "Block already exists");
-            return;
-        }
         // ensure that blocks exist incrementally and continuously
         let can_insert_block = self.can_insert_block(height).await;
         if !can_insert_block {
+            // TODO(STR-1454): handle this gracefully using service framework
             panic!("last_block_height does not match the expected height!");
         }
 
@@ -36,6 +32,9 @@ impl<'a> BlockService<'a> {
         match Block::insert(active_model).exec(self.db).await {
             Ok(_) => {
                 debug!(height, %block_id, "Block inserted and indexed");
+            }
+            Err(err) if is_duplicate_entry(&err) => {
+                debug!(height, "Block already exists, skipping");
             }
             Err(err) => {
                 error!(height, ?err, "Failed to insert block");
@@ -88,4 +87,8 @@ impl<'a> BlockService<'a> {
         }
         self.prev_block_exists(height).await
     }
+}
+
+fn is_duplicate_entry(err: &DbErr) -> bool {
+    err.to_string().contains("1062")
 }
