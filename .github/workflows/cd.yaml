@@ -110,63 +110,63 @@ jobs:
           # Push both tags
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-  update-helm-values:
-    name: Update Helm Values
-    needs: [build-and-push, detect-changes]
-    runs-on: ubuntu-latest
-    environment: ${{ needs.detect-changes.outputs.environment }}
-    steps:
-      - name: Set up SSH for private repo access
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOYMENTS_REPO_WRITE }}
-      - name: Clone deployments repo (specific branch)
-        env:
-          BRANCH_OF_DEPLOYMENT_REPO: ${{ vars.BRANCH_OF_DEPLOYMENT_REPO }}
-        run: |
-          git clone --depth=1 --branch $BRANCH_OF_DEPLOYMENT_REPO git@github.com:alpenlabs/deployments.git deployments
-          cd deployments
-          git checkout $BRANCH_OF_DEPLOYMENT_REPO
+  # update-helm-values:
+  #   name: Update Helm Values
+  #   needs: [build-and-push, detect-changes]
+  #   runs-on: ubuntu-latest
+  #   environment: ${{ needs.detect-changes.outputs.environment }}
+  #   steps:
+  #     - name: Set up SSH for private repo access
+  #       uses: webfactory/ssh-agent@v0.9.0
+  #       with:
+  #         ssh-private-key: ${{ secrets.DEPLOYMENTS_REPO_WRITE }}
+  #     - name: Clone deployments repo (specific branch)
+  #       env:
+  #         BRANCH_OF_DEPLOYMENT_REPO: ${{ vars.BRANCH_OF_DEPLOYMENT_REPO }}
+  #       run: |
+  #         git clone --depth=1 --branch $BRANCH_OF_DEPLOYMENT_REPO git@github.com:alpenlabs/deployments.git deployments
+  #         cd deployments
+  #         git checkout $BRANCH_OF_DEPLOYMENT_REPO
 
-      - name: Install yq
-        run: |
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-          sudo chmod +x /usr/local/bin/yq
+  #     - name: Install yq
+  #       run: |
+  #         sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+  #         sudo chmod +x /usr/local/bin/yq
 
-      - name: Update Docker image tag in Helm values # Sanitized SHORT_TAG and safe yq usage
-        env:
-          CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
-        run: |
-          # Sanitize and truncate SHORT_TAG
-          SHORT_TAG="${COMMIT//[^a-zA-Z0-9._-]/}"
-          SHORT_TAG="${SHORT_TAG:0:7}"
+  #     - name: Update Docker image tag in Helm values # Sanitized SHORT_TAG and safe yq usage
+  #       env:
+  #         CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
+  #       run: |
+  #         # Sanitize and truncate SHORT_TAG
+  #         SHORT_TAG="${COMMIT//[^a-zA-Z0-9._-]/}"
+  #         SHORT_TAG="${SHORT_TAG:0:7}"
 
-          VALUES_FILE="deployments/clusters/$CLUSTER_NAME/values/strata-apps-values.yaml"
+  #         VALUES_FILE="deployments/clusters/$CLUSTER_NAME/values/strata-apps-values.yaml"
 
-          echo "Updating frontend tag in $VALUES_FILE"
-          yq eval -i  ".checkpointExpFe.image.tag = \"$SHORT_TAG\"" "$VALUES_FILE"
+  #         echo "Updating frontend tag in $VALUES_FILE"
+  #         yq eval -i  ".checkpointExpFe.image.tag = \"$SHORT_TAG\"" "$VALUES_FILE"
 
-          echo "Updating backend tag in $VALUES_FILE"
-          yq eval -i  ".checkpointExpBe.image.tag = \"$SHORT_TAG\"" "$VALUES_FILE"
+  #         echo "Updating backend tag in $VALUES_FILE"
+  #         yq eval -i  ".checkpointExpBe.image.tag = \"$SHORT_TAG\"" "$VALUES_FILE"
 
-      - name: Commit and push changes
-        env:
-          GH_ACTIONS_USER_NAME: ${{ vars.GH_ACTIONS_USER_NAME }}
-          CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
-          BRANCH_OF_DEPLOYMENT_REPO: ${{ vars.BRANCH_OF_DEPLOYMENT_REPO }}
-        run: |
-          SHORT_TAG="${COMMIT//[^a-zA-Z0-9._-]/}"
-          SHORT_TAG="${SHORT_TAG:0:7}"
+  #     - name: Commit and push changes
+  #       env:
+  #         GH_ACTIONS_USER_NAME: ${{ vars.GH_ACTIONS_USER_NAME }}
+  #         CLUSTER_NAME: ${{ vars.CLUSTER_NAME }}
+  #         BRANCH_OF_DEPLOYMENT_REPO: ${{ vars.BRANCH_OF_DEPLOYMENT_REPO }}
+  #       run: |
+  #         SHORT_TAG="${COMMIT//[^a-zA-Z0-9._-]/}"
+  #         SHORT_TAG="${SHORT_TAG:0:7}"
 
-          cd deployments
-          git config user.name "$GH_ACTIONS_USER_NAME"
-          git config user.email "$GH_ACTIONS_USER_NAME@alpenlabs.io"
+  #         cd deployments
+  #         git config user.name "$GH_ACTIONS_USER_NAME"
+  #         git config user.email "$GH_ACTIONS_USER_NAME@alpenlabs.io"
 
-          if git diff --quiet; then
-            echo "No changes to commit."
-          else
-            git add clusters/$CLUSTER_NAME/values
-            git commit -m "Update image tags to $SHORT_TAG for updated services"
-            git pull --rebase origin $BRANCH_OF_DEPLOYMENT_REPO
-            git push origin $BRANCH_OF_DEPLOYMENT_REPO
-          fi
+  #         if git diff --quiet; then
+  #           echo "No changes to commit."
+  #         else
+  #           git add clusters/$CLUSTER_NAME/values
+  #           git commit -m "Update image tags to $SHORT_TAG for updated services"
+  #           git pull --rebase origin $BRANCH_OF_DEPLOYMENT_REPO
+  #           git push origin $BRANCH_OF_DEPLOYMENT_REPO
+  #         fi
