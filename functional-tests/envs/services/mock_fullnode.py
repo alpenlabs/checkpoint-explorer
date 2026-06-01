@@ -12,6 +12,15 @@ def _hex(seed: int, namespace: int = 0) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _epoch_commitment(epoch: int, blocks_per_checkpoint: int):
+    last_slot = (epoch + 1) * blocks_per_checkpoint - 1
+    return {
+        "epoch": epoch,
+        "last_slot": last_slot,
+        "last_blkid": _hex(last_slot, namespace=2),
+    }
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # suppress per-request logs
@@ -41,7 +50,14 @@ class _MockServer(HTTPServer):
 
     def dispatch(self, method: str, params: list):
         if method == "strata_getChainStatus":
-            return {"confirmed": {"epoch": self._n - 1}}
+            latest = max(0, self._n - 1)
+            confirmed = max(0, latest - 1)
+            finalized = max(0, confirmed - 1)
+            return {
+                "latest": _epoch_commitment(latest, self._bpc),
+                "confirmed": _epoch_commitment(confirmed, self._bpc),
+                "finalized": _epoch_commitment(finalized, self._bpc),
+            }
         if method == "strata_getCheckpointInfo":
             return self._checkpoint_info(int(params[0]))
         if method == "strata_getHeadersInRange":

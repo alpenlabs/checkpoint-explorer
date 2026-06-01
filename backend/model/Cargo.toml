@@ -11,3 +11,4 @@ sea-orm = { workspace = true }
 serde = { workspace = true }
 hex = { workspace = true }
 anyhow = { workspace = true }
+strata-identifiers = { workspace = true }
