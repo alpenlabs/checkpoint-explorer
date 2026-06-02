@@ -38,15 +38,19 @@ async fn fetch_checkpoints(
     info!("Fetching checkpoints from fullnode...");
 
     let chain_status = fetcher.get_chain_status().await?;
-    let fn_chkpt = chain_status.confirmed.epoch;
+    let latest_checkpoint = chain_status.latest.epoch();
+    let confirmed_checkpoint = chain_status.confirmed.epoch();
+    let finalized_checkpoint = chain_status.finalized.epoch();
 
     let starting_checkpoint = get_starting_checkpoint_idx(database.clone()).await?;
     info!(
-        fullnode_latest = fn_chkpt,
+        fullnode_latest = latest_checkpoint,
+        fullnode_confirmed = confirmed_checkpoint,
+        fullnode_finalized = finalized_checkpoint,
         local_start = starting_checkpoint,
         "Checkpoint sync range"
     );
-    for idx in starting_checkpoint..=fn_chkpt {
+    for idx in starting_checkpoint..=latest_checkpoint {
         if !checkpoint_db.checkpoint_exists(idx).await {
             info!(idx, "Checkpoint not in db, fetching");
             if let Ok(checkpoint) = fetcher.fetch_checkpoint_info(idx).await {
@@ -55,9 +59,17 @@ async fn fetch_checkpoints(
         }
     }
 
-    // notify block fetcher with the l2_end of the latest confirmed checkpoint
-    if let Some(latest) = checkpoint_db.get_checkpoint_by_idx(fn_chkpt).await {
-        let _ = tx.send(latest.l2_range.1);
+    let block_fetch_checkpoint = match checkpoint_db.get_checkpoint_by_idx(latest_checkpoint).await
+    {
+        Some(checkpoint) => Some(checkpoint),
+        None => match checkpoint_db.get_latest_checkpoint_index().await {
+            Some(idx) => checkpoint_db.get_checkpoint_by_idx(idx).await,
+            None => None,
+        },
+    };
+
+    if let Some(checkpoint) = block_fetch_checkpoint {
+        let _ = tx.send(checkpoint.l2_range.1);
     }
 
     Ok(())

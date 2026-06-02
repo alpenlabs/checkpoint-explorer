@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::result::Result;
 use std::str::FromStr;
+use strata_identifiers::EpochCommitment;
 /// Represents an L2 Block ID.
 pub type L2BlockId = String;
 pub type L1BlockId = String;
@@ -58,12 +59,9 @@ pub struct L2BlockCommitment {
 /// Wire type for strata_getChainStatus (only fields we use).
 #[derive(Debug, Deserialize)]
 pub struct RpcOLChainStatus {
+    pub latest: EpochCommitment,
     pub confirmed: EpochCommitment,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EpochCommitment {
-    pub epoch: u32,
+    pub finalized: EpochCommitment,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]

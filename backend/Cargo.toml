@@ -33,3 +33,4 @@ sea-orm-migration = "0.9"
 config = "0.13"
 dotenvy = "0.15.7"
 jsonrpsee = { version = "0.26.0", features = ["http-client"] }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.1.0-alpha-rc23", default-features = false, features = ["serde"] }
