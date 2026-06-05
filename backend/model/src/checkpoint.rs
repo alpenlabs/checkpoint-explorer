@@ -129,6 +129,15 @@ impl RpcCheckpointInfo {
             ConfStatus::Finalized { .. } => RpcCheckpointConfStatus::Finalized,
         }
     }
+
+    pub fn checkpoint_txid(&self) -> Option<&Txid> {
+        match &self.confirmation_status {
+            ConfStatus::Pending => None,
+            ConfStatus::Confirmed { l1_reference } | ConfStatus::Finalized { l1_reference } => {
+                Some(&l1_reference.txid)
+            }
+        }
+    }
 }
 
 impl From<RpcCheckpointInfo> for ActiveModel {
@@ -186,5 +195,94 @@ impl From<Model> for RpcCheckpointInfoCheckpointExp {
             l1_reference: model.checkpoint_txid.map(|txid| ExplorerL1Ref { txid }),
             confirmation_status: Some(model.status),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::ActiveValue::Set;
+
+    fn checkpoint_json(status: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "idx": 7,
+            "l1_range": [
+                {"height": 70, "blkid": "l1-start"},
+                {"height": 79, "blkid": "l1-end"}
+            ],
+            "l2_range": [
+                {"slot": 700, "blkid": "l2-start"},
+                {"slot": 799, "blkid": "l2-end"}
+            ],
+            "confirmation_status": status
+        })
+    }
+
+    fn confirmed_status(txid: &str) -> serde_json::Value {
+        serde_json::json!({
+            "status": "confirmed",
+            "l1_reference": {
+                "l1_block": {"height": 79, "blkid": "l1-end"},
+                "txid": txid,
+                "wtxid": "wtxid"
+            }
+        })
+    }
+
+    fn finalized_status(txid: &str) -> serde_json::Value {
+        serde_json::json!({
+            "status": "finalized",
+            "l1_reference": {
+                "l1_block": {"height": 79, "blkid": "l1-end"},
+                "txid": txid,
+                "wtxid": "wtxid"
+            }
+        })
+    }
+
+    #[test]
+    fn checkpoint_txid_is_none_for_pending() {
+        let checkpoint: RpcCheckpointInfo =
+            serde_json::from_value(checkpoint_json(serde_json::json!({"status": "pending"})))
+                .expect("pending checkpoint should deserialize");
+
+        assert_eq!(checkpoint.status(), RpcCheckpointConfStatus::Pending);
+        assert_eq!(checkpoint.checkpoint_txid(), None);
+    }
+
+    #[test]
+    fn checkpoint_txid_is_exposed_for_confirmed_and_finalized() {
+        let confirmed: RpcCheckpointInfo =
+            serde_json::from_value(checkpoint_json(confirmed_status("confirmed-txid")))
+                .expect("confirmed checkpoint should deserialize");
+        let finalized: RpcCheckpointInfo =
+            serde_json::from_value(checkpoint_json(finalized_status("finalized-txid")))
+                .expect("finalized checkpoint should deserialize");
+
+        assert_eq!(confirmed.status(), RpcCheckpointConfStatus::Confirmed);
+        assert_eq!(
+            confirmed.checkpoint_txid().map(String::as_str),
+            Some("confirmed-txid")
+        );
+        assert_eq!(finalized.status(), RpcCheckpointConfStatus::Finalized);
+        assert_eq!(
+            finalized.checkpoint_txid().map(String::as_str),
+            Some("finalized-txid")
+        );
+    }
+
+    #[test]
+    fn active_model_sets_checkpoint_txid_for_confirmed_checkpoint() {
+        let checkpoint: RpcCheckpointInfo =
+            serde_json::from_value(checkpoint_json(confirmed_status("confirmed-txid")))
+                .expect("confirmed checkpoint should deserialize");
+
+        let active_model: ActiveModel = checkpoint.into();
+
+        assert_eq!(active_model.status, Set(RpcCheckpointConfStatus::Confirmed));
+        assert_eq!(
+            active_model.checkpoint_txid,
+            Set(Some("confirmed-txid".to_string()))
+        );
     }
 }

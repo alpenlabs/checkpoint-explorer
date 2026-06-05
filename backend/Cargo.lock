@@ -2119,6 +2119,7 @@ dependencies = [
  "hex",
  "sea-orm",
  "serde",
+ "serde_json",
  "strata-identifiers",
 ]
 
