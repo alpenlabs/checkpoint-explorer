@@ -12,3 +12,6 @@ serde = { workspace = true }
 hex = { workspace = true }
 anyhow = { workspace = true }
 strata-identifiers = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

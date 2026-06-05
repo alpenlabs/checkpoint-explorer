@@ -185,6 +185,15 @@ async fn update_checkpoints_status(
     status: RpcCheckpointConfStatus,
 ) -> anyhow::Result<()> {
     let checkpoint_db = CheckpointService::new(&database.db);
+    let chain_status = fetcher.get_chain_status().await?;
+    // Highest checkpoint index that can have transitioned out of this local status.
+    // Pending checkpoints can become confirmed/finalized through the confirmed boundary;
+    // confirmed checkpoints can become finalized through the finalized boundary.
+    let transition_boundary_idx = match status {
+        RpcCheckpointConfStatus::Pending => chain_status.confirmed.epoch(),
+        RpcCheckpointConfStatus::Confirmed => chain_status.finalized.epoch(),
+        RpcCheckpointConfStatus::Finalized => return Ok(()),
+    };
 
     let mut idx: u32 = match status {
         RpcCheckpointConfStatus::Pending => {
@@ -208,7 +217,7 @@ async fn update_checkpoints_status(
         RpcCheckpointConfStatus::Finalized => return Ok(()),
     };
 
-    loop {
+    while idx <= transition_boundary_idx {
         // This is the stopping condition for the loop. If the checkpoint is not found in the database,
         // break the loop as we have already updated all the checkpoints.
         let Some(checkpoint_in_db) = checkpoint_db.get_checkpoint_by_idx(idx).await else {
@@ -222,10 +231,16 @@ async fn update_checkpoints_status(
         };
 
         let new_status = checkpoint_from_rpc.status();
+        let new_txid = checkpoint_from_rpc.checkpoint_txid();
+        let current_txid = checkpoint_in_db
+            .l1_reference
+            .as_ref()
+            .map(|l1_ref| &l1_ref.txid);
 
-        // if there is no change in status, return by doing nothing
-        if checkpoint_in_db.confirmation_status == Some(new_status) {
-            return Ok(());
+        // This checkpoint is already current, but later rows in the bounded range may have changed.
+        if checkpoint_in_db.confirmation_status == Some(new_status) && current_txid == new_txid {
+            idx = idx.saturating_add(1);
+            continue;
         }
 
         info!(idx, %new_status, "Updating checkpoint status");
@@ -241,4 +256,6 @@ async fn update_checkpoints_status(
 
         idx = idx.saturating_add(1);
     }
+
+    Ok(())
 }
