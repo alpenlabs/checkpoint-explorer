@@ -87,12 +87,12 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
         with:
+          registries: "496607027995"
           mask-password: "true"
       - name: Build and push Docker image
         id: build-and-push
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }}
+          ECR_REGISTRY: 496607027995.dkr.ecr.us-east-1.amazonaws.com
         run: |
           IMAGE_TAG=${COMMIT::7}
           SERVICE="${{ matrix.service }}"
@@ -100,7 +100,19 @@ jobs:
 
           DOCKERFILE_PATH="$SERVICE/Dockerfile"
           CONTEXT_DIR="$SERVICE"
-          ECR_REPOSITORY="$ECR_REPOSITORY_PREFIX/${SERVICE}"
+
+          case "$SERVICE" in
+            backend)
+              ECR_REPOSITORY="strata/batch-exp-backend"
+              ;;
+            frontend)
+              ECR_REPOSITORY="strata/batch-exp-frontend"
+              ;;
+            *)
+              echo "Unsupported service: $SERVICE" >&2
+              exit 1
+              ;;
+          esac
 
           # Build with both tags
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
