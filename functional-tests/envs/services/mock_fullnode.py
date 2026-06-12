@@ -3,7 +3,8 @@
 import hashlib
 import json
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 def _hex(seed: int, namespace: int = 0) -> str:
@@ -42,11 +43,24 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(resp_bytes)
 
 
-class _MockServer(HTTPServer):
-    def __init__(self, host: str, port: int, num_checkpoints: int, blocks_per_checkpoint: int):
+class _MockServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        num_checkpoints: int,
+        blocks_per_checkpoint: int,
+        header_response_delay: float,
+    ):
         super().__init__((host, port), _Handler)
         self._n = num_checkpoints
         self._bpc = blocks_per_checkpoint
+        self._header_response_delay = header_response_delay
+        self._header_request_lock = threading.Lock()
+        self._active_header_requests = 0
+        self._max_concurrent_header_requests = 0
 
     def dispatch(self, method: str, params: list):
         if method == "strata_getChainStatus":
@@ -61,8 +75,12 @@ class _MockServer(HTTPServer):
         if method == "strata_getCheckpointInfo":
             return self._checkpoint_info(int(params[0]))
         if method == "strata_getHeadersInRange":
-            return self._headers_in_range(int(params[0]), int(params[1]))
+            return self._tracked_headers_in_range(int(params[0]), int(params[1]))
         return None
+
+    def max_concurrent_header_requests(self):
+        with self._header_request_lock:
+            return self._max_concurrent_header_requests
 
     def _checkpoint_info(self, idx: int):
         if idx < 0 or idx >= self._n:
@@ -119,6 +137,22 @@ class _MockServer(HTTPServer):
             })
         return headers
 
+    def _tracked_headers_in_range(self, start: int, end: int):
+        with self._header_request_lock:
+            self._active_header_requests += 1
+            self._max_concurrent_header_requests = max(
+                self._max_concurrent_header_requests,
+                self._active_header_requests,
+            )
+
+        try:
+            if self._header_response_delay > 0:
+                time.sleep(self._header_response_delay)
+            return self._headers_in_range(start, end)
+        finally:
+            with self._header_request_lock:
+                self._active_header_requests -= 1
+
 
 class MockFullnodeService:
     """
@@ -131,10 +165,22 @@ class MockFullnodeService:
     - Status: finalized (old), confirmed (second-to-last), pending (latest)
     """
 
-    def __init__(self, port: int, num_checkpoints: int = 5, blocks_per_checkpoint: int = 10):
+    def __init__(
+        self,
+        port: int,
+        num_checkpoints: int = 5,
+        blocks_per_checkpoint: int = 10,
+        header_response_delay: float = 0.0,
+    ):
         self.port = port
         self.url = f"http://127.0.0.1:{port}/"
-        self._server = _MockServer("127.0.0.1", port, num_checkpoints, blocks_per_checkpoint)
+        self._server = _MockServer(
+            "127.0.0.1",
+            port,
+            num_checkpoints,
+            blocks_per_checkpoint,
+            header_response_delay,
+        )
         self._thread: threading.Thread | None = None
         self.num_checkpoints = num_checkpoints
         self.blocks_per_checkpoint = blocks_per_checkpoint
@@ -147,3 +193,9 @@ class MockFullnodeService:
         self._server.shutdown()
         if self._thread:
             self._thread.join(timeout=5)
+
+    def max_concurrent_header_requests(self):
+        return self._server.max_concurrent_header_requests()
+
+    def block_hash(self, height: int):
+        return _hex(height, namespace=2)

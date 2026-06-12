@@ -39,7 +39,18 @@ def main(argv):
 
     flexitest.runtime.load_candidate_modules(modules)
 
-    global_envs = {"explorer": ExplorerEnvConfig()}
+    global_envs = {
+        "explorer": ExplorerEnvConfig(),
+        "explorer_parallel_blocks": ExplorerEnvConfig(
+            # Coupled to backend MAX_HEADERS_RANGE=5000: 10002 blocks create 3 chunks.
+            num_checkpoints=2,
+            blocks_per_checkpoint=5001,
+            fullnode_port=18001,
+            db_port=13307,
+            backend_port=13001,
+            header_response_delay=0.2,
+        ),
+    }
 
     datadir_root = flexitest.create_datadir_in_workspace(os.path.join(root_dir, DD_ROOT))
     rt = flexitest.TestRuntime(global_envs, datadir_root, {})
