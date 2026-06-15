@@ -120,21 +120,25 @@ wheels = [
 name = "checkpoint-explorer-functional-tests"
 version = "0.1.0"
 source = { editable = "." }
-dependencies = [
+
+[package.dev-dependencies]
+dev = [
     { name = "flexitest" },
     { name = "requests" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "flexitest", git = "https://codeberg.org/treyd/flexitest.git" },
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "flexitest", git = "https://codeberg.org/treyd/flexitest.git?rev=50841c19444e154eb18750cade4cd89587c24344" },
     { name = "requests", specifier = ">=2.32,<3" },
 ]
 
 [[package]]
 name = "flexitest"
 version = "0.1.0"
-source = { git = "https://codeberg.org/treyd/flexitest.git#3f1346143922bdcdccb3ad64298db80825e6ae93" }
+source = { git = "https://codeberg.org/treyd/flexitest.git?rev=50841c19444e154eb18750cade4cd89587c24344#50841c19444e154eb18750cade4cd89587c24344" }
 
 [[package]]
 name = "idna"
