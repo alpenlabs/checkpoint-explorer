@@ -4,13 +4,13 @@ version = "0.1.0"
 description = "Functional tests for the checkpoint explorer API"
 authors = []
 requires-python = ">=3.10"
-dependencies = [
-  "flexitest",
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "flexitest @ git+https://codeberg.org/treyd/flexitest.git@50841c19444e154eb18750cade4cd89587c24344",
   "requests>=2.32,<3",
 ]
-
-[tool.uv.sources]
-flexitest = { git = "https://codeberg.org/treyd/flexitest.git" }
 
 [build-system]
 requires = ["hatchling"]
