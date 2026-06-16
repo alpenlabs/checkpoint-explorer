@@ -1,5 +1,5 @@
 # Use Node.js for development
-FROM node:20
+FROM node:26
 
 WORKDIR /app
 
