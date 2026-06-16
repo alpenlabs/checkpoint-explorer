@@ -40,6 +40,9 @@ class ExplorerLiveEnv(flexitest.LiveEnv):
     def get_explorer_client(self) -> ExplorerApiClient:
         return self._client
 
+    def get_fullnode(self) -> MockFullnodeService:
+        return self._fullnode
+
     def shutdown(self):
         self._backend.stop()
         self._database.stop()
@@ -60,25 +63,34 @@ class ExplorerEnvConfig(flexitest.EnvConfig):
         self,
         num_checkpoints: int = _NUM_CHECKPOINTS,
         blocks_per_checkpoint: int = _BLOCKS_PER_CHECKPOINT,
+        fullnode_port: int = _FULLNODE_PORT,
+        db_port: int = _DB_PORT,
+        backend_port: int = _BACKEND_PORT,
+        header_response_delay: float = 0.0,
     ):
         super().__init__()
         self.num_checkpoints = num_checkpoints
         self.blocks_per_checkpoint = blocks_per_checkpoint
+        self.fullnode_port = fullnode_port
+        self.db_port = db_port
+        self.backend_port = backend_port
+        self.header_response_delay = header_response_delay
 
     def init(self, ectx: flexitest.EnvContext) -> ExplorerLiveEnv:
         fullnode = MockFullnodeService(
-            port=_FULLNODE_PORT,
+            port=self.fullnode_port,
             num_checkpoints=self.num_checkpoints,
             blocks_per_checkpoint=self.blocks_per_checkpoint,
+            header_response_delay=self.header_response_delay,
         )
         fullnode.start()
 
-        database = DatabaseService(port=_DB_PORT)
+        database = DatabaseService(port=self.db_port)
         database.start()
 
         datadir = ectx.make_service_dir("backend")
         backend = BackendService(
-            port=_BACKEND_PORT,
+            port=self.backend_port,
             fullnode_url=fullnode.url,
             database_url=database.url,
             log_file=os.path.join(datadir, "service.log"),
@@ -105,6 +117,10 @@ class ExplorerTestBase(flexitest.Test):
     def get_client(self, ctx: flexitest.RunContext) -> ExplorerApiClient:
         env: ExplorerLiveEnv = ctx.env
         return env.get_explorer_client()
+
+    def get_fullnode(self, ctx: flexitest.RunContext) -> MockFullnodeService:
+        env: ExplorerLiveEnv = ctx.env
+        return env.get_fullnode()
 
 
 def _synced_count(client: ExplorerApiClient) -> int:
