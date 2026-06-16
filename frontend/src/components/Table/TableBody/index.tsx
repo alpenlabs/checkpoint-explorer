@@ -31,6 +31,7 @@ const TableBody: React.FC = () => {
   /**
    * - Ensures data reloads when the user changes pages.
    */
+  // TODO(STR-3793): Centralize typed checkpoint API fetching and remove production debug logging.
   useEffect(() => {
     const fetchData = async () => {
       try {

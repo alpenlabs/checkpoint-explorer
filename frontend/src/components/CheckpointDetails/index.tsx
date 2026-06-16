@@ -30,6 +30,7 @@ const CheckpointDetails = () => {
   }, [page]);
 
   useEffect(() => {
+    // TODO(STR-3793): Reuse the shared typed checkpoint API helper here instead of duplicating fetch/parsing.
     console.log("currentPage", currentPage);
     const fetchData = async () => {
       try {

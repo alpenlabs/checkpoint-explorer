@@ -3,6 +3,7 @@ use sea_orm::entity::prelude::*;
 use sea_orm::ActiveValue::Set;
 use serde::{Deserialize, Serialize};
 
+// TODO(STR-3792): Rename block model/table abstractions to L2 block-header terminology.
 /// Represents the Block model for the database
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "blocks")]

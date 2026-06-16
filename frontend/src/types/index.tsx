@@ -1,3 +1,4 @@
+// TODO(STR-3793): Align these checkpoint response types with the backend and remove stale fields.
 export interface RpcCheckpointInfoCheckpointExp {
   idx: number; // Index of the checkpoint
   l1_range: [number, number]; // L1 height range (start, end)
