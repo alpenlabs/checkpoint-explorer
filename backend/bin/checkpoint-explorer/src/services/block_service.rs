@@ -8,6 +8,7 @@ use tracing::{error, info};
 
 const MAX_HEADERS_RANGE: u64 = 5000;
 
+// TODO(STR-3792): Rename this fetcher/service to block-header terminology without changing sync behavior.
 pub async fn run_block_fetcher(
     fetcher: Arc<StrataFetcher>,
     database: Arc<DatabaseWrapper>,

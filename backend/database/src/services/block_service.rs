@@ -12,6 +12,7 @@ impl<'a> BlockService<'a> {
         Self { db }
     }
 
+    // TODO(STR-3791): Move header indexing into a monitored service-framework worker and return structured continuity errors instead of panicking.
     pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u32) {
         // Use `From` to convert `RpcBlockHeader` into an `ActiveModel`
         let mut active_model: BlockActiveModel = rpc_block_header.into();
@@ -22,7 +23,6 @@ impl<'a> BlockService<'a> {
         // ensure that blocks exist incrementally and continuously
         let can_insert_block = self.can_insert_block(height).await;
         if !can_insert_block {
-            // TODO(STR-1454): handle this gracefully using service framework
             panic!("last_block_height does not match the expected height!");
         }
 

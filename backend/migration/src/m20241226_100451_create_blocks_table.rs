@@ -6,6 +6,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // TODO(STR-3792): Decide whether to migrate this compatibility table name to explicit header naming.
         manager
             .create_table(
                 Table::create()

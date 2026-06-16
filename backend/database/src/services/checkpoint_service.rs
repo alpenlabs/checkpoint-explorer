@@ -21,6 +21,7 @@ impl<'a> CheckpointService<'a> {
         Self { db }
     }
 
+    // TODO(STR-3791): Propagate database errors instead of collapsing them into false.
     pub async fn checkpoint_exists(&self, idx: u32) -> bool {
         Checkpoint::find()
             .filter(model::checkpoint::Column::Idx.eq(idx))
@@ -131,6 +132,7 @@ impl<'a> CheckpointService<'a> {
         absolute_first_page: u64,
         order: Option<&str>,
     ) -> PaginatedData<RpcCheckpointInfoCheckpointExp> {
+        // TODO(STR-3791): Return a Result so query failures are visible to API callers.
         let total_checkpoints = self.get_total_checkpoint_count().await;
         let total_pages = (total_checkpoints as f64 / page_size as f64).ceil() as u64;
         let offset = (current_page - absolute_first_page) * page_size; // Adjust based on the first page

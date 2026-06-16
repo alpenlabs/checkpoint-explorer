@@ -10,6 +10,7 @@ const shortenIds = (
 };
 
 function isRpcCheckpointInfo(data: any): data is RpcCheckpointInfoCheckpointExp[] {
+  // TODO(STR-3793): Replace this any-based stale guard with typed API response parsing.
   return (
     Array.isArray(data) && // Ensure it's an array
     data.length > 0 && // Ensure the array is not empty
