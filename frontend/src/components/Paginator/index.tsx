@@ -4,7 +4,7 @@ import CheckpointDetails from "../CheckpointDetails";
 import TableBody from "../Table/TableBody";
 // Define the props for the Table component
 
-const PaginatedData = ({}) => {
+const PaginatedData = () => {
   return (
     <div className={styles.wrapper}>
       <Routes>

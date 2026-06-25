@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package.json and lock file first to optimize caching
 COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies from the lockfile for reproducible image builds
+RUN npm ci
 
 # Copy the rest of the project files
 COPY . .

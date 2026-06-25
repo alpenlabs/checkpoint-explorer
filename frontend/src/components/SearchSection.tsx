@@ -20,7 +20,6 @@ const SearchSection = () => {
       const result = await response.json();
 
       if (result.error) {
-        console.log("Error fetching data:", result.error);
         setError(true); // Show error message
         setTimeout(() => setError(false), 3000); // Hide after 3s
         return;
