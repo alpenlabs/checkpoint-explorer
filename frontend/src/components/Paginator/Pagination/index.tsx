@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
 // import { useAlert } from "../../../hooks/useAlert";
 import styles from "../../../styles/Pagination.module.css";
 import AlertComponent from "../../Alert";
@@ -23,24 +22,15 @@ const Pagination: React.FC<PaginationProps> = ({
   );
   const endPage = Math.min(totalPages, startPage + pageWindowSize - 1);
 
-  const navigate = useNavigate();
-  const [_, setSearchParams] = useSearchParams();
-  const [editablePage, setEditablePage] = useState<number | string>(
-    currentPage,
-  );
+  const [editablePage, setEditablePage] = useState<string | null>(null);
   const [showAlert, setShowAlert] = useState(false);
-
-  // Sync the input value with currentPage
-  useEffect(() => {
-    setEditablePage(currentPage);
-  }, [currentPage]);
+  const pageInputValue = editablePage ?? String(currentPage);
 
   // Function to update both state and URL
   const updatePage = (page: number) => {
     if (page >= firstPage && page <= totalPages) {
       setPage(page);
-      setSearchParams({ p: page.toString() }); // Update the URL query
-      navigate(`?p=${page}`, { replace: true }); // Prevent adding to browser history stack
+      setEditablePage(null);
     } else {
       setShowAlert(true);
       setTimeout(() => {
@@ -53,7 +43,7 @@ const Pagination: React.FC<PaginationProps> = ({
 
   // Validate and navigate to new page on input change
   const handlePageChange = () => {
-    const page = Number(editablePage);
+    const page = Number(pageInputValue);
     updatePage(page);
   };
 
@@ -86,7 +76,7 @@ const Pagination: React.FC<PaginationProps> = ({
               <input
                 key={page}
                 className={styles.pageInput}
-                value={editablePage}
+                value={pageInputValue}
                 onChange={(e) => setEditablePage(e.target.value)}
                 onBlur={handlePageChange}
                 onKeyDown={(e) => e.key === "Enter" && handlePageChange()}
