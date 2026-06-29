@@ -64,7 +64,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Configure AWS ECR Details
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v6.2.0
         with:
           role-to-assume: ${{ secrets.AWS_ECR_ROLE }}
           aws-region: us-east-1
