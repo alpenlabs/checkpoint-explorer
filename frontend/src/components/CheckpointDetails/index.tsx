@@ -7,31 +7,18 @@ import Pagination from "../Paginator/Pagination/index";
 import { useConfig } from "../../hooks/useConfig";
 
 const CheckpointDetails = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const page = searchParams.get("p"); // Get the "p" query parameter
-
-  // Ensure `currentPage` updates when `p` changes
-  const [currentPage, setCurrentPage] = useState<number>(Number(page) || 0);
+  const currentPage = Number(page) || 0;
   const [checkpoint, setData] = useState<RpcCheckpointInfoCheckpointExp | null>(
     null,
   );
   const [totalPages, setTotalPages] = useState(0);
   const [firstPage, setFirstPage] = useState(0);
-  const rowsPerPage = 1; // Fixed value
-  const { apiBaseUrl, bitcoinExplorerBaseUrl } =
-    useConfig();
-
-  useEffect(() => {
-    // Convert the query param `p` to a number
-    const pageNumber = Number(page);
-    if (!isNaN(pageNumber) && pageNumber !== currentPage) {
-      setCurrentPage(pageNumber);
-    }
-  }, [page]);
+  const { apiBaseUrl, bitcoinExplorerBaseUrl } = useConfig();
 
   useEffect(() => {
     // TODO(STR-3793): Reuse the shared typed checkpoint API helper here instead of duplicating fetch/parsing.
-    console.log("currentPage", currentPage);
     const fetchData = async () => {
       try {
         const response = await fetch(
@@ -39,7 +26,6 @@ const CheckpointDetails = () => {
         );
         const result = await response.json();
         setData(result.result.items[0]);
-        console.log("result", result);
         setTotalPages(result.result.total_pages);
         setFirstPage(result.result.absolute_first_page);
       } catch (error) {
@@ -47,7 +33,7 @@ const CheckpointDetails = () => {
       }
     };
     if (currentPage >= 0) fetchData();
-  }, [currentPage, rowsPerPage]);
+  }, [apiBaseUrl, currentPage]);
 
   if (!checkpoint) {
     return <div className={styles.noData}>Loading...</div>;
@@ -124,7 +110,7 @@ const CheckpointDetails = () => {
         currentPage={currentPage}
         firstPage={firstPage}
         totalPages={totalPages}
-        setPage={setCurrentPage}
+        setPage={(page) => setSearchParams({ p: page.toString() })}
       />
     </>
   );

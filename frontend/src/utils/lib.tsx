@@ -9,22 +9,23 @@ const shortenIds = (
   return `${value.slice(2, startLength)}...${value.slice(-endLength)}`;
 };
 
-function isRpcCheckpointInfo(data: any): data is RpcCheckpointInfoCheckpointExp[] {
+function isRpcCheckpointInfo(
+  data: unknown,
+): data is RpcCheckpointInfoCheckpointExp[] {
   // TODO(STR-3793): Replace this any-based stale guard with typed API response parsing.
+  const first = Array.isArray(data) ? data[0] : null;
   return (
     Array.isArray(data) && // Ensure it's an array
     data.length > 0 && // Ensure the array is not empty
-    typeof data[0] === "object" && // Check the first element is an object
-    data[0] !== null &&
-    "idx" in data[0] &&
-    "l1_range" in data[0] &&
-    Array.isArray(data[0].l1_range) &&
-    data[0].l1_range.length === 2 &&
-    "l2_range" in data[0] &&
-    Array.isArray(data[0].l2_range) &&
-    data[0].l2_range.length === 2 &&
-    "l2_blockid" in data[0] &&
-    typeof data[0].l2_blockid === "string"
+    typeof first === "object" && // Check the first element is an object
+    first !== null &&
+    "idx" in first &&
+    "l1_range" in first &&
+    Array.isArray(first.l1_range) &&
+    first.l1_range.length === 2 &&
+    "l2_range" in first &&
+    Array.isArray(first.l2_range) &&
+    first.l2_range.length === 2
   );
 }
 function reverseEndian(value: string | null | undefined): string {
@@ -34,7 +35,6 @@ function reverseEndian(value: string | null | undefined): string {
 }
 
 function truncateTxid(value: string | null | undefined): string {
-  console.log(value);
   if (!value) return "N/A";
   if (value === "N/A" || value === "-") return value;
 

@@ -8,25 +8,15 @@ import { useConfig } from "../../../hooks/useConfig";
 
 const TableBody: React.FC = () => {
   const [data, setData] = useState<RpcCheckpointInfoCheckpointExp[]>([]);
-  const [rowsPerPage] = useState(10); // Fixed value
+  const rowsPerPage = 10;
   const [totalPages, setTotalPages] = useState(0);
   const [firstPage, setFirstPage] = useState(1);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Get `p` from URL and ensure it's a valid number
   const pageFromUrl = Number(searchParams.get("p")) || 1;
-  const [currentPage, setCurrentPage] = useState(pageFromUrl);
-  const {
-    apiBaseUrl,
-    bitcoinExplorerBaseUrl,
-    refreshIntervalS,
-  } = useConfig();
-
-  useEffect(() => {
-    if (currentPage !== pageFromUrl) {
-      setCurrentPage(pageFromUrl);
-    }
-  }, [pageFromUrl]);
+  const currentPage = pageFromUrl;
+  const { apiBaseUrl, bitcoinExplorerBaseUrl, refreshIntervalS } = useConfig();
 
   /**
    * - Ensures data reloads when the user changes pages.
@@ -35,7 +25,6 @@ const TableBody: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log("fetching data...");
         const response = await fetch(
           `${apiBaseUrl}/api/checkpoints?p=${currentPage}&ps=${rowsPerPage}`,
         );
@@ -54,7 +43,7 @@ const TableBody: React.FC = () => {
     const interval = setInterval(fetchData, refreshIntervalS * 1000);
 
     return () => clearInterval(interval); // Clear interval when unmounting or dependencies change
-  }, [currentPage, rowsPerPage]); // Trigger fetch when `currentPage` changes
+  }, [apiBaseUrl, currentPage, refreshIntervalS]); // Trigger fetch when `currentPage` changes
 
   /**
    * Immediately update `searchParams` and state
@@ -64,7 +53,6 @@ const TableBody: React.FC = () => {
     if (page < firstPage || page > totalPages || page === currentPage) return;
 
     setSearchParams({ p: page.toString() }); // Update URL first
-    setCurrentPage(page); // Then update state immediately
   };
 
   return (
