@@ -79,9 +79,9 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }}
         run: |
-          IMAGE_TAG=${COMMIT::7}
+          IMAGE_TAG="$COMMIT"
           SERVICE="${{ matrix.service }}"
-          echo "Building and pushing $SERVICE image with tag $IMAGE_TAG and latest"
+          echo "Building and pushing $SERVICE image with tag $IMAGE_TAG"
 
           DOCKERFILE_PATH="$SERVICE/Dockerfile"
           CONTEXT_DIR="$SERVICE"
@@ -89,14 +89,11 @@ jobs:
           # Set repo var ECR_REPOSITORY_PREFIX=strata/batch-exp.
           ECR_REPOSITORY="${ECR_REPOSITORY_PREFIX}-${SERVICE}"
 
-          # Build with both tags
+          # Build with an immutable full-commit tag.
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-                      -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
                       -f $DOCKERFILE_PATH $CONTEXT_DIR
 
-          # Push both tags
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
   # update-helm-values:
   #   name: Update Helm Values
   #   needs: [build-and-push, detect-changes]
