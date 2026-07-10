@@ -26,6 +26,7 @@ services:
       APP_DATABASE_URL: mysql://explorer:password@mariadb:3306/checkpoint_explorer_db
       STRATA_FULLNODE: "http://host.docker.internal:8432"
       APP_FETCH_INTERVAL: 5
+      APP_STATUS_UPDATE_INTERVAL: 5
       RUST_LOG: "info,sqlx::query=warn"
     ports:
       - "3000:3000"
