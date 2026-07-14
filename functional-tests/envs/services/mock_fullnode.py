@@ -90,6 +90,13 @@ class _MockServer(ThreadingHTTPServer):
         l2_end = l2_start + self._bpc - 1
         l1_start = idx * 10
         l1_end = l1_start + 9
+        # Exercise the nullable `l2_start` path; real checkpoint-sync nodes can return
+        # null for any non-genesis checkpoint, not specifically the latest one.
+        l2_start_commitment = (
+            None
+            if idx == self._n - 1
+            else {"slot": l2_start, "blkid": _hex(l2_start, namespace=2)}
+        )
 
         l1_ref = {
             "l1_block": {"height": l1_end, "blkid": _hex(l1_end, namespace=1)},
@@ -111,10 +118,8 @@ class _MockServer(ThreadingHTTPServer):
                 {"height": l1_start, "blkid": _hex(l1_start, namespace=1)},
                 {"height": l1_end, "blkid": _hex(l1_end, namespace=1)},
             ],
-            "l2_range": [
-                {"slot": l2_start, "blkid": _hex(l2_start, namespace=2)},
-                {"slot": l2_end, "blkid": _hex(l2_end, namespace=2)},
-            ],
+            "l2_start": l2_start_commitment,
+            "l2_end": {"slot": l2_end, "blkid": _hex(l2_end, namespace=2)},
             "confirmation_status": conf_status,
         }
 

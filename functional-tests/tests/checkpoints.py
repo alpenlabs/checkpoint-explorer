@@ -23,13 +23,19 @@ class CheckpointsPaginationTest(testenv.ExplorerTestBase):
         if not items:
             return True
 
+        null_l2_start_items = [item for item in items if item["l2_start"] is None]
+        known_l2_start_items = [item for item in items if item["l2_start"] is not None]
+        assert null_l2_start_items, "at least one checkpoint should preserve null l2_start"
+        assert known_l2_start_items, "at least one checkpoint should preserve a known l2_start"
+
         # Validate checkpoint shape
         first = items[0]
         assert "idx" in first, "checkpoint must have 'idx'"
         assert "l1_range" in first, "checkpoint must have 'l1_range'"
-        assert "l2_range" in first, "checkpoint must have 'l2_range'"
+        assert "l2_start" in first, "checkpoint must have 'l2_start'"
+        assert "l2_end" in first, "checkpoint must have 'l2_end'"
         assert len(first["l1_range"]) == 2, "l1_range must be a 2-element list"
-        assert len(first["l2_range"]) == 2, "l2_range must be a 2-element list"
+        assert isinstance(first["l2_end"], int), "l2_end must be an integer"
 
         # Verify page 2 returns different results when enough checkpoints exist
         if len(items) == 10:

@@ -21,11 +21,17 @@ pub type L2BlockFetchTarget = u64;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfo {
     /// The index of the checkpoint
-    pub idx: u32,
+    pub idx: u64,
+
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (L1BlockCommitment, L1BlockCommitment),
-    /// The L2 height range that the checkpoint covers (start, end)
-    pub l2_range: (L2BlockCommitment, L2BlockCommitment),
+
+    /// The first L2 block that the checkpoint covers, if known.
+    pub l2_start: Option<L2BlockCommitment>,
+
+    /// The last L2 block that the checkpoint covers.
+    pub l2_end: L2BlockCommitment,
+
     confirmation_status: ConfStatus,
 }
 
@@ -71,9 +77,11 @@ pub enum RpcCheckpointConfStatus {
     /// Pending to be posted on L1
     #[sea_orm(string_value = "Pending")]
     Pending,
+
     /// Confirmed on L1
     #[sea_orm(string_value = "Confirmed")]
     Confirmed,
+
     /// Finalized on L1
     #[sea_orm(string_value = "Finalized")]
     Finalized,
@@ -109,10 +117,10 @@ impl Display for RpcCheckpointConfStatus {
 #[sea_orm(table_name = "checkpoints")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub idx: u32,
+    pub idx: u64,
     pub l1_start: u64,
     pub l1_end: u64,
-    pub l2_start: u64,
+    pub l2_start: Option<u64>,
     pub l2_end: u64,
     pub checkpoint_txid: Option<Txid>,
     pub status: RpcCheckpointConfStatus,
@@ -157,8 +165,8 @@ impl From<RpcCheckpointInfo> for ActiveModel {
             idx: Set(info.idx),
             l1_start: Set(info.l1_range.0.height),
             l1_end: Set(info.l1_range.1.height),
-            l2_start: Set(info.l2_range.0.slot),
-            l2_end: Set(info.l2_range.1.slot),
+            l2_start: Set(info.l2_start.map(|commitment| commitment.slot)),
+            l2_end: Set(info.l2_end.slot),
             checkpoint_txid: Set(txid),
             status: Set(status),
         }
@@ -175,13 +183,20 @@ pub struct ExplorerL1Ref {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RpcCheckpointInfoCheckpointExp {
     /// The index of the checkpoint
-    pub idx: u32,
+    pub idx: u64,
+
     /// The L1 height range that the checkpoint covers (start, end)
     pub l1_range: (u64, u64),
-    /// The L2 height range that the checkpoint covers (start, end)
-    pub l2_range: (u64, u64),
+
+    /// The first L2 block that the checkpoint covers, if known.
+    pub l2_start: Option<u64>,
+
+    /// The last L2 block that the checkpoint covers.
+    pub l2_end: u64,
+
     /// Txid of the L1 transaction where the checkpoint was committed (None if not yet committed)
     pub l1_reference: Option<ExplorerL1Ref>,
+
     /// Confirmation status of checkpoint
     pub confirmation_status: Option<RpcCheckpointConfStatus>,
 }
@@ -191,7 +206,8 @@ impl From<Model> for RpcCheckpointInfoCheckpointExp {
         Self {
             idx: model.idx,
             l1_range: (model.l1_start, model.l1_end),
-            l2_range: (model.l2_start, model.l2_end),
+            l2_start: model.l2_start,
+            l2_end: model.l2_end,
             l1_reference: model.checkpoint_txid.map(|txid| ExplorerL1Ref { txid }),
             confirmation_status: Some(model.status),
         }
@@ -210,10 +226,8 @@ mod tests {
                 {"height": 70, "blkid": "l1-start"},
                 {"height": 79, "blkid": "l1-end"}
             ],
-            "l2_range": [
-                {"slot": 700, "blkid": "l2-start"},
-                {"slot": 799, "blkid": "l2-end"}
-            ],
+            "l2_start": {"slot": 700, "blkid": "l2-start"},
+            "l2_end": {"slot": 799, "blkid": "l2-end"},
             "confirmation_status": status
         })
     }
@@ -284,5 +298,20 @@ mod tests {
             active_model.checkpoint_txid,
             Set(Some("confirmed-txid".to_string()))
         );
+    }
+
+    #[test]
+    fn checkpoint_l2_start_can_be_absent() {
+        let mut json = checkpoint_json(serde_json::json!({"status": "pending"}));
+        json["l2_start"] = serde_json::Value::Null;
+
+        let checkpoint: RpcCheckpointInfo =
+            serde_json::from_value(json).expect("checkpoint without l2_start should deserialize");
+
+        assert_eq!(checkpoint.l2_start, None);
+
+        let active_model: ActiveModel = checkpoint.into();
+        assert_eq!(active_model.l2_start, Set(None));
+        assert_eq!(active_model.l2_end, Set(799));
     }
 }

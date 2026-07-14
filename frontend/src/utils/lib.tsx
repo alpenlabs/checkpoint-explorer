@@ -23,9 +23,10 @@ function isRpcCheckpointInfo(
     "l1_range" in first &&
     Array.isArray(first.l1_range) &&
     first.l1_range.length === 2 &&
-    "l2_range" in first &&
-    Array.isArray(first.l2_range) &&
-    first.l2_range.length === 2
+    "l2_start" in first &&
+    (typeof first.l2_start === "number" || first.l2_start === null) &&
+    "l2_end" in first &&
+    typeof first.l2_end === "number"
   );
 }
 function reverseEndian(value: string | null | undefined): string {

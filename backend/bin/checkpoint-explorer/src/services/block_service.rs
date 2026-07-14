@@ -123,7 +123,7 @@ async fn fetch_blocks(fetcher: Arc<StrataFetcher>, database: Arc<DatabaseWrapper
         );
 
         for header in insertable_headers.drain(..) {
-            let checkpoint_idx = header.epoch;
+            let checkpoint_idx = u64::from(header.epoch);
             block_db.insert_block(header, checkpoint_idx).await;
         }
 

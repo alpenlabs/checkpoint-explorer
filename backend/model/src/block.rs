@@ -11,7 +11,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub block_hash: String,
     pub height: u64,
-    pub checkpoint_idx: u32,
+    pub checkpoint_idx: u64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -25,7 +25,7 @@ impl From<RpcBlockHeader> for ActiveModel {
         Self {
             block_hash: Set(header.blkid),
             height: Set(header.slot),
-            checkpoint_idx: Set(header.epoch),
+            checkpoint_idx: Set(u64::from(header.epoch)),
         }
     }
 }

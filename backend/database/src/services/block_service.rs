@@ -13,7 +13,7 @@ impl<'a> BlockService<'a> {
     }
 
     // TODO(STR-3791): Move header indexing into a monitored service-framework worker and return structured continuity errors instead of panicking.
-    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u32) {
+    pub async fn insert_block(&self, rpc_block_header: RpcBlockHeader, checkpoint_idx: u64) {
         // Use `From` to convert `RpcBlockHeader` into an `ActiveModel`
         let mut active_model: BlockActiveModel = rpc_block_header.into();
 
