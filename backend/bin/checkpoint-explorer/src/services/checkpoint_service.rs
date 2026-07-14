@@ -246,10 +246,12 @@ async fn update_checkpoints_status(
         let current_txid = checkpoint_in_db
             .l1_reference
             .as_ref()
-            .map(|l1_ref| &l1_ref.txid);
+            .map(|l1_ref| l1_ref.txid.as_str());
 
         // This checkpoint is already current, but later rows in the bounded range may have changed.
-        if checkpoint_in_db.confirmation_status == Some(new_status) && current_txid == new_txid {
+        if checkpoint_in_db.confirmation_status == Some(new_status)
+            && current_txid == new_txid.as_deref()
+        {
             idx = idx.saturating_add(1);
             continue;
         }
