@@ -9,8 +9,8 @@ export default defineConfig({
   },
   server: {
     allowedHosts: [
-      "checkpoints.testnet.alpenlabs.io",
-      "checkpoints.testnet-staging.stratabtc.org",
+      "checkpoints.testnet.alpen.org",
+      "checkpoints-staging.testnet-v2.alpenlabs.io",
     ],
   },
 });

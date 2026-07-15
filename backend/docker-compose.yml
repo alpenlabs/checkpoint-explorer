@@ -24,8 +24,9 @@ services:
     container_name: checkpoint_explorer_app
     environment:
       APP_DATABASE_URL: mysql://explorer:password@mariadb:3306/checkpoint_explorer_db
-      STRATA_FULLNODE: "https://rpc.testnet-staging.stratabtc.org/"
+      STRATA_FULLNODE: "http://host.docker.internal:8432"
       APP_FETCH_INTERVAL: 5
+      APP_STATUS_UPDATE_INTERVAL: 5
     ports:
       - "3000:3000"
     depends_on:

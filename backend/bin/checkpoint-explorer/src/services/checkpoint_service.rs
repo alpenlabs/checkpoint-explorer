@@ -187,10 +187,10 @@ async fn update_checkpoints_status(
     let checkpoint_db = CheckpointService::new(&database.db);
     let chain_status = fetcher.get_chain_status().await?;
     // Highest checkpoint index that can have transitioned out of this local status.
-    // Pending checkpoints can become confirmed/finalized through the confirmed boundary;
+    // Pending checkpoints can become confirmed as soon as `strata_getCheckpointInfo` sees an L1 ref;
     // confirmed checkpoints can become finalized through the finalized boundary.
     let transition_boundary_idx = match status {
-        RpcCheckpointConfStatus::Pending => chain_status.confirmed.epoch(),
+        RpcCheckpointConfStatus::Pending => chain_status.latest.epoch(),
         RpcCheckpointConfStatus::Confirmed => chain_status.finalized.epoch(),
         RpcCheckpointConfStatus::Finalized => return Ok(()),
     };
