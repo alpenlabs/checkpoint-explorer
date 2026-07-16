@@ -2,8 +2,8 @@
 export interface RpcCheckpointInfoCheckpointExp {
   idx: number; // Index of the checkpoint
   l1_range: [number, number]; // L1 height range (start, end)
-  l2_range: [number, number]; // L2 height range (start, end)
-  l2_blockid: string; // L2 block ID
+  l2_start: number | null; // First L2 block, if known
+  l2_end: number; // Last L2 block
   l1_reference?: CheckpointL1Ref;
   confirmation_status?: string;
 }

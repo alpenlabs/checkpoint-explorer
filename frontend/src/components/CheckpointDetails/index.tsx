@@ -95,13 +95,13 @@ const CheckpointDetails = () => {
         <div className={styles.checkpointRow}>
           <span className={styles.checkpointLabel}>Strata start block:</span>
           <span className={styles.checkpointValue}>
-            {checkpoint.l2_range[0]}
+            {checkpoint.l2_start ?? "N/A"}
           </span>
         </div>
         <div className={styles.checkpointRow}>
           <span className={styles.checkpointLabel}>Strata end block:</span>
           <span className={styles.checkpointValue}>
-            {checkpoint.l2_range[1]}
+            {checkpoint.l2_end}
           </span>
         </div>
       </div>

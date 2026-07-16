@@ -123,7 +123,7 @@ async fn fetch_blocks(fetcher: Arc<StrataFetcher>, database: Arc<DatabaseWrapper
         );
 
         for header in insertable_headers.drain(..) {
-            let checkpoint_idx = header.epoch;
+            let checkpoint_idx = u64::from(header.epoch);
             block_db.insert_block(header, checkpoint_idx).await;
         }
 
@@ -262,17 +262,18 @@ mod tests {
     use super::*;
 
     fn header(slot: u64) -> RpcBlockHeader {
-        RpcBlockHeader {
-            slot,
-            epoch: 0,
-            blkid: format!("{slot:064x}"),
-            timestamp: 0,
-            parent_blkid: format!("{:064x}", slot.saturating_sub(1)),
-            state_root: format!("{slot:064x}"),
-            body_root: format!("{slot:064x}"),
-            logs_root: format!("{slot:064x}"),
-            is_terminal: false,
-        }
+        serde_json::from_value(serde_json::json!({
+            "slot": slot,
+            "epoch": 0,
+            "blkid": format!("{slot:064x}"),
+            "timestamp": 0,
+            "parent_blkid": format!("{:064x}", slot.saturating_sub(1)),
+            "state_root": format!("{slot:064x}"),
+            "body_root": format!("{slot:064x}"),
+            "logs_root": format!("{slot:064x}"),
+            "is_terminal": false,
+        }))
+        .expect("test block header should deserialize")
     }
 
     #[test]

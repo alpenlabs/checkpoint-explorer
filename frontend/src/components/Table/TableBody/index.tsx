@@ -119,10 +119,10 @@ const TableBody: React.FC = () => {
                   </a>
                 </td>
                 <td className={styles.tableCell}>
-                  {checkpoint.l2_range[0]}
+                  {checkpoint.l2_start ?? "N/A"}
                 </td>
                 <td className={styles.tableCell}>
-                  {checkpoint.l2_range[1]}
+                  {checkpoint.l2_end}
                 </td>
               </tr>
             ))}

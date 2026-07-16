@@ -51,7 +51,7 @@ async fn fetch_checkpoints(
         "Checkpoint sync range"
     );
     for idx in starting_checkpoint..=latest_checkpoint {
-        if !checkpoint_db.checkpoint_exists(idx).await {
+        if !checkpoint_db.checkpoint_exists(u64::from(idx)).await {
             info!(idx, "Checkpoint not in db, fetching");
             if let Ok(checkpoint) = fetcher.fetch_checkpoint_info(idx).await {
                 checkpoint_db.insert_checkpoint(checkpoint).await;
@@ -59,7 +59,9 @@ async fn fetch_checkpoints(
         }
     }
 
-    let block_fetch_checkpoint = match checkpoint_db.get_checkpoint_by_idx(latest_checkpoint).await
+    let block_fetch_checkpoint = match checkpoint_db
+        .get_checkpoint_by_idx(u64::from(latest_checkpoint))
+        .await
     {
         Some(checkpoint) => Some(checkpoint),
         None => match checkpoint_db.get_latest_checkpoint_index().await {
@@ -69,7 +71,7 @@ async fn fetch_checkpoints(
     };
 
     if let Some(checkpoint) = block_fetch_checkpoint {
-        let _ = tx.send(checkpoint.l2_range.1);
+        let _ = tx.send(checkpoint.l2_end);
     }
 
     Ok(())
@@ -85,23 +87,30 @@ async fn get_starting_checkpoint_idx(db: Arc<DatabaseWrapper>) -> anyhow::Result
     let last_block = block_db.get_latest_block_index().await;
 
     let local_last_checkpoint = match checkpoint_db.get_latest_checkpoint_index().await {
-        Some(idx) => idx,
+        Some(idx) => checkpoint_idx_to_epoch(idx)?,
         // no checkpoints in db yet — start from the beginning
         None => return Ok(0),
     };
 
     // we are calling it probable_* to consider some weirdest condition when
     // we have the block but no any earlier checkpoint (before where block corresponds)
-    let probable_starting_checkpoint: u32 = if let Some(block_height) = last_block {
+    let probable_starting_checkpoint = if let Some(block_height) = last_block {
         checkpoint_db
             .get_checkpoint_idx_by_block_height(block_height)
             .await?
+            .map(checkpoint_idx_to_epoch)
+            .transpose()?
             .unwrap_or(0)
     } else {
         0
     };
 
     Ok(min(probable_starting_checkpoint, local_last_checkpoint))
+}
+
+fn checkpoint_idx_to_epoch(idx: u64) -> anyhow::Result<u32> {
+    u32::try_from(idx)
+        .map_err(|_| anyhow::anyhow!("checkpoint index exceeds RPC epoch range: {idx}"))
 }
 
 /// This function starts the checkpoint status updater task
@@ -198,7 +207,7 @@ async fn update_checkpoints_status(
     let mut idx: u32 = match status {
         RpcCheckpointConfStatus::Pending => {
             match checkpoint_db.get_earliest_pending_checkpoint_idx().await {
-                Some(i) => i,
+                Some(i) => checkpoint_idx_to_epoch(i)?,
                 None => {
                     info!("No more pending checkpoints locally.");
                     return Ok(());
@@ -207,7 +216,7 @@ async fn update_checkpoints_status(
         }
         RpcCheckpointConfStatus::Confirmed => {
             match checkpoint_db.get_earliest_confirmed_checkpoint_idx().await {
-                Some(i) => i,
+                Some(i) => checkpoint_idx_to_epoch(i)?,
                 None => {
                     info!("No more confirmed checkpoints locally.");
                     return Ok(());
@@ -218,9 +227,11 @@ async fn update_checkpoints_status(
     };
 
     while idx <= transition_boundary_idx {
+        let checkpoint_idx = u64::from(idx);
         // This is the stopping condition for the loop. If the checkpoint is not found in the database,
         // break the loop as we have already updated all the checkpoints.
-        let Some(checkpoint_in_db) = checkpoint_db.get_checkpoint_by_idx(idx).await else {
+        let Some(checkpoint_in_db) = checkpoint_db.get_checkpoint_by_idx(checkpoint_idx).await
+        else {
             info!("Status of all checkpoints in db is already updated.");
             return Ok(());
         };
@@ -235,10 +246,12 @@ async fn update_checkpoints_status(
         let current_txid = checkpoint_in_db
             .l1_reference
             .as_ref()
-            .map(|l1_ref| &l1_ref.txid);
+            .map(|l1_ref| l1_ref.txid.as_str());
 
         // This checkpoint is already current, but later rows in the bounded range may have changed.
-        if checkpoint_in_db.confirmation_status == Some(new_status) && current_txid == new_txid {
+        if checkpoint_in_db.confirmation_status == Some(new_status)
+            && current_txid == new_txid.as_deref()
+        {
             idx = idx.saturating_add(1);
             continue;
         }
@@ -247,7 +260,7 @@ async fn update_checkpoints_status(
         // update the db with the new checkpoint record instead of tweaking the existing one
         // as there could be change in both status and txid
         checkpoint_db
-            .update_checkpoint(idx, checkpoint_from_rpc)
+            .update_checkpoint(checkpoint_idx, checkpoint_from_rpc)
             .await
             .map_err(|e| {
                 error!(?e, "Failed to update checkpoint status");

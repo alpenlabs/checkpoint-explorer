@@ -25,14 +25,14 @@ const Header = () => {
         <nav className={styles.navMenu} role="navigation">
           <div className={styles.navLinks}>
             <a
-              href="https://alpenlabs.io/"
+              href="https://alpen.org"
               target="_blank"
               className={styles.navLink}
             >
               Home
             </a>
             <a
-              href="https://docs.alpenlabs.io/"
+              href="https://docs.alpen.org"
               target="_blank"
               className={styles.navLink}
             >
