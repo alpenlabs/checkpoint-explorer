@@ -30,7 +30,7 @@ rand = "0.9"
 lru = "0.10"
 hex = "0.4"
 sea-orm-migration = "0.9"
-config = "0.13"
+config = "0.15"
 dotenvy = "0.15.7"
 jsonrpsee = { version = "0.26.0", features = ["http-client"] }
 strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2", default-features = false, features = ["serde"] }
