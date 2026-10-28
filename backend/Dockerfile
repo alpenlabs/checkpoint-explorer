@@ -14,13 +14,13 @@ COPY migration/Cargo.toml migration/
 COPY model/Cargo.toml model/
 
 # Fetch dependencies first to leverage caching
-RUN cargo fetch
+RUN cargo fetch --locked
 
 # Copy the project files into the container
 COPY . .
 
 # Build the project in release mode
-RUN cargo build
+RUN cargo build --locked
 
 # Stage 2: Runtime
 FROM rust
